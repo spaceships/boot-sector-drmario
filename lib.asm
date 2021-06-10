@@ -56,14 +56,36 @@ ds_end:
     ret
 
 display_number: 
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    cmp ax,0
+    je dn_zero
+    call dn_rec
+dn_ret:
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+dn_zero:
+    mov ax,'0'
+    call display_letter
+    jmp dn_ret
+dn_rec:
     mov dx,0
     mov cx,10
     div cx
     push dx
     cmp ax,0
-    je display_number_1
-    call display_number
-display_number_1:
+    je dn_done
+    call dn_rec
+dn_done:
     pop ax
     add al,'0'
     call display_letter

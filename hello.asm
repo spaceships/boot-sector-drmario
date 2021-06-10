@@ -3,7 +3,7 @@
 start:
     mov bx, string
     call display_string
-    int 0x20
+    hlt
 
 string: 
     db 0x0d,0x0a,"Hello, world",0x0d,0x0a,0

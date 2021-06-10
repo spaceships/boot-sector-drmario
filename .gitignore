@@ -1,2 +1,5 @@
 .gdb_history
 .tags
+*.img
+*.o
+*.elf
