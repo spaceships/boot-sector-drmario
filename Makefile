@@ -10,7 +10,8 @@ endif
 
 run: $(patsubst %,%.img,$(RUN_ARGS))
 	# qemu-system-i386 -s -S -nographic -hda $^
-	qemu-system-i386 -nographic -hda $^
+	# qemu-system-i386 -nographic -hda $^
+	qemu-system-i386 -hda $^
 
 gdb: $(patsubst %,%.elf,$(GDB_ARGS))
 	gdb $< \
