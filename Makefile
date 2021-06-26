@@ -3,15 +3,22 @@ ifeq (run, $(firstword $(MAKECMDGOALS)))
   $(eval $(RUN_ARGS):;@:)
 endif
 
+ifeq (drun, $(firstword $(MAKECMDGOALS)))
+  DRUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(DRUN_ARGS):;@:)
+endif
+
 ifeq (gdb, $(firstword $(MAKECMDGOALS)))
   GDB_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
   $(eval $(GDB_ARGS):;@:)
 endif
 
 run: $(patsubst %,%.img,$(RUN_ARGS))
-	# qemu-system-i386 -s -S -nographic -hda $^
-	# qemu-system-i386 -nographic -hda $^
+	# qemu-system-i386 -s -S -hda $^
 	qemu-system-i386 -hda $^
+
+drun: $(patsubst %,%.img,$(DRUN_ARGS))
+	qemu-system-i386 -s -S -hda $^
 
 gdb: $(patsubst %,%.elf,$(GDB_ARGS))
 	gdb $< \
