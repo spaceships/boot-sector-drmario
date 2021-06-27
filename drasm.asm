@@ -1,7 +1,9 @@
 ; TODO:
-;   2. make pills fall
-;   3. control pills L+R
-;   4. control pills rotation
+;   * check for cures
+;   * random color 
+;   * control pills L+R
+;   * control pills rotation
+;   * random viruses!
 
     bits 16
 
