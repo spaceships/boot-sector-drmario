@@ -121,39 +121,51 @@ db_col:
     jne db_row 
     ret
 
-    ; al: x
-    ; cl; y low
-    ; ch; y high
-draw_vert_border:
-    push bx
-    mov bl,0        ; set sprite index
-    mov bh,BORDER_COLOR ; set color
-dvb_loop: 
-    mov ah,cl       ; set y for draw_sprite
-    call draw_sprite
-    inc cl          ; increment ylow
-    cmp cl,ch
-    jle dvb_loop
-    pop bx
-    ret
-
+; i = 0
+; for y in 0..18 {
+;   x=BOARD_X-1
+;   mask=(word)board_mask[i]
+;   do {
+;         if mask&1 { draw_sprite(x, BOARD_Y-2+y) }
+;         x++
+;         mask >>= 1
+;     } while mask != 0
+;   if y<2 || y>16 { i+=2 }
+; }
+; al: BOARD_X-1+x
+; ah: BOARD_Y-2+y
+; bx: draw_sprite args
+; cx: mask
+; si: i
+; di: mask&1
 draw_outline:
-    mov bx,0
-do_top:
+    mov bx,BORDER_COLOR*256
+    xor si,si
+    mov ah,BOARD_Y-2
+do_y_loop:
     mov al,BOARD_X-1
-    add al,bl
-    ; draw top
-    cs mov si,[border_index+bx]
-    and si,0x00FF
-    cs mov word cx,[border_value+si]
-    call draw_vert_border
-    ; draw bottom
-    mov cl,BOARD_Y+16
-    mov ch,cl
-    call draw_vert_border 
-    inc bx
-    cmp bx,10
-    jne do_top
+    cs mov cx,[border_mask+si]
+do_x_loop:
+    mov di,cx
+    and di,1
+    jz do_skip_draw
+    call draw_sprite
+do_skip_draw:
+    inc al
+    shr cx,1
+    jnz do_x_loop
+    cmp ah,BOARD_Y
+    jl do_increment_i
+    cmp ah,BOARD_Y+15
+    jl do_not_increment_i
+do_increment_i:
+    ; one byte smaller than add si,2
+    inc si
+    inc si
+do_not_increment_i:
+    inc ah
+    cmp ah,BOARD_Y+16
+    jle do_y_loop
     ret
 
 ; al: x
@@ -292,21 +304,10 @@ sprites:
     db 0b01111100
     db 0b00000000
 
-border_index:
-    db 0
-    db 2
-    db 2
-    db 4
-    db 6
-    db 6
-    db 4
-    db 2
-    db 2
-    db 0
-border_value:
-    db BOARD_Y-1,  BOARD_Y+16
-    db BOARD_Y-1,  BOARD_Y-1
-    db BOARD_Y-2,  BOARD_Y-1
-    db BOARD_Y+16, BOARD_Y+16
+border_mask:
+    dw 0b0000000001001000
+    dw 0b0000001111001111
+    dw 0b0000001000000001
+    dw 0b0000001111111111
 
 %include "end.asm"
