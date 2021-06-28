@@ -18,7 +18,7 @@ board:      equ base + 6 ; 8x16x2 low: type, high: color
 BLACK:          equ 0x00
 PILL_RED:       equ 0x27
 PILL_YELLOW:    equ 0x2c
-PILL_BLUE:      equ 0x3c
+PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6a
 
 BOARD_X:    equ 16
@@ -69,7 +69,7 @@ pf_keep_checking:
     cmp byte [board+bx+18],0    ; otherwise is there something there?
     jne pf_stop_falling         ; if there is, stop falling
     mov word ax,[board+bx+2]    ; fall right side
-    mov word [board+bx+18],ax   ; copy right side down
+    xchg ax,[board+bx+18]       ; copy right side down
     mov word [board+bx+2],0     ; zero out old right side
 pf_fall:
     mov word ax,[board+bx]      ; fall left side
@@ -121,44 +121,39 @@ db_col:
     jne db_row 
     ret
 
+    ; al: x
+    ; cl; y low
+    ; ch; y high
+draw_vert_border:
+    push bx
+    mov bl,0        ; set sprite index
+    mov bh,BORDER_COLOR ; set color
+dvb_loop: 
+    mov ah,cl       ; set y for draw_sprite
+    call draw_sprite
+    inc cl          ; increment ylow
+    cmp cl,ch
+    jle dvb_loop
+    pop bx
+    ret
+
 draw_outline:
-    mov bl,0
-    mov bh,BORDER_COLOR
+    mov bx,0
+do_top:
     mov al,BOARD_X-1
-    mov ah,BOARD_Y-2
-    mov cx,18
-db_left_col:
-    inc ah
-    call draw_sprite
-    loop db_left_col
-    mov cx,9
-db_bottom_row:
-    call draw_sprite
-    inc al
-    loop db_bottom_row
-    mov cx,18
-db_right_col:
-    call draw_sprite
-    dec ah
-    loop db_right_col
-    add ah,1
-    mov cx,3
-db_right_top:
-    dec al
-    call draw_sprite
-    loop db_right_top
-    dec ah
-    call draw_sprite
-    sub al,3
-    call draw_sprite
-    add ah,1
-    call draw_sprite
-    mov cx,2
-db_left_top:
-    dec al
-    call draw_sprite
-    loop db_left_top
-    
+    add al,bl
+    ; draw top
+    cs mov si,[border_index+bx]
+    and si,0x00FF
+    cs mov word cx,[border_value+si]
+    call draw_vert_border
+    ; draw bottom
+    mov cl,BOARD_Y+16
+    mov ch,cl
+    call draw_vert_border 
+    inc bx
+    cmp bx,10
+    jne do_top
     ret
 
 ; al: x
@@ -271,7 +266,7 @@ sprites:
     db 0b00000000
     ; 4: pill right
     db 0b11111100 
-    db 0b00000010
+    db 0b00000110
     db 0b11111110
     db 0b11111110
     db 0b11111110
@@ -296,5 +291,22 @@ sprites:
     db 0b10000010
     db 0b01111100
     db 0b00000000
+
+border_index:
+    db 0
+    db 2
+    db 2
+    db 4
+    db 6
+    db 6
+    db 4
+    db 2
+    db 2
+    db 0
+border_value:
+    db BOARD_Y-1,  BOARD_Y+16
+    db BOARD_Y-1,  BOARD_Y-1
+    db BOARD_Y-2,  BOARD_Y-1
+    db BOARD_Y+16, BOARD_Y+16
 
 %include "end.asm"
