@@ -10,7 +10,7 @@
 base:       equ 0xfc80
 old_time:   equ base    ; [word] last time we got from int
 pill_falling:   equ base + 2 ; [byte] is a pill falling
-cur_pill_loc:   equ base + 3 ; [word] x,y of current pill
+cur_pill_loc:   equ base + 3 ; [word] loc of current pill
 cur_pill_rot:   equ base + 5 ; [byte] rotation of pill:
                              ; 0: 0, 1: 90, 2: 180, 3: 270
 board:      equ base + 6 ; 8x16x2 low: type, high: color
@@ -54,24 +54,13 @@ gl_pill_falling:
 ; Make a pill fall if it can
 pillfall:
     ; Checking whether we are done
-    mov ax,[cur_pill_loc]       ; al = x, ah = y
-    cmp ah,15
-    jl pf_keep_checking        ; if y is not 0, keep going
+    mov bx,[cur_pill_loc]
+    cmp bx,(16*8*2-15)             ; are we at the bottom row?
+    jl pf_keep_checking         ; if y is not 0, keep going
 pf_stop_falling:
     mov byte [pill_falling],0   ; clear pill falling flag
     jmp pf_done
-    ; Checking whether there is another pill below
 pf_keep_checking:
-    ; Get current board location
-    mov al,ah   ; al = y
-    mov bl,16   ; mult by 16
-    mul bl      ; ax = 16*y
-    mov cx,ax   ; cx = 16*y
-    mov ax,[cur_pill_loc] ; al = x
-    mov bl,2
-    mul bl      ; ax = 2*x
-    add ax,cx   ; ax = 16*y+2*x
-    mov bx,ax   ; bx = 16*y+2*x
     cmp byte [board+bx+16],0    ; is there something below?
     jne pf_stop_falling         ; if there is, stop falling
     ; If pill is horizontal, check if right is filled too
@@ -86,7 +75,7 @@ pf_fall:
     mov word ax,[board+bx]      ; fall left side
     mov word [board+bx+16],ax   ; copy it down
     mov word [board+bx],0       ; zero out old one
-    add word [cur_pill_loc],0x0100  ; update pill location
+    add word [cur_pill_loc],16  ; update pill location
 
 pf_done:
     ret
@@ -97,7 +86,7 @@ new_pill:
     mov byte [board+7],PILL_RED
     mov byte [board+8],0x04
     mov byte [board+9],PILL_BLUE
-    mov word [cur_pill_loc],0x0003
+    mov word [cur_pill_loc],6
     mov byte [cur_pill_rot],0
     mov byte [pill_falling],1 
     ret
