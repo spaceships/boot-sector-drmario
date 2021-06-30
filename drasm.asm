@@ -85,23 +85,22 @@ pf_done:
 ; randomize rand variable
 ; mangles ax,dx
 rng:
-    mov ax,8086
+    mov ax,80861
     mul word [rand]
-    add ax,8086
+    add ax,80861
     mov [rand],ax
     ret
 
 ; put a random color from colors array into al
 ; mangles ax,bx,dx
 rand_color:
-    call rng
-    mov ax,[rand]
+    call rng    ; sets ax
     xor dx,dx
     mov bx,3
     div bx
-    mov al,dl
+    mov al,dl   ; al = remainder
     mov bx,colors
-    cs xlat
+    cs xlat     ; al = [colors + al]
     ret
 
 new_pill:
