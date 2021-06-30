@@ -9,11 +9,12 @@
 
 base:       equ 0xfc80
 old_time:   equ base    ; [word] last time we got from int
-pill_falling:   equ base + 2 ; [byte] is a pill falling
-cur_pill_loc:   equ base + 3 ; [word] loc of current pill
-cur_pill_rot:   equ base + 5 ; [byte] rotation of pill:
+rand:       equ old_time + 2 ; [word] rng seed
+pill_falling:   equ rand + 2 ; [byte] is a pill falling
+cur_pill_loc:   equ pill_falling + 1 ; [word] loc of current pill
+cur_pill_rot:   equ cur_pill_loc + 2 ; [byte] rotation of pill:
                              ; 0: 0, 1: 90, 2: 180, 3: 270
-board:      equ base + 6 ; 8x16x2 low: type, high: color
+board:      equ cur_pill_rot + 1 ; 8x16x2 low: type, high: color
 
 BLACK:          equ 0x00
 PILL_RED:       equ 0x27
@@ -39,6 +40,7 @@ start:
 game_loop:
     mov ah,0x00
     int 0x1a    ; bios clock read
+    mov [rand],dx
     cmp dx,[old_time]
     je game_loop
     mov [old_time],dx
@@ -55,7 +57,7 @@ gl_pill_falling:
 pillfall:
     ; Checking whether we are done
     mov bx,[cur_pill_loc]
-    cmp bx,(16*8*2-15)             ; are we at the bottom row?
+    cmp bx,(16*8*2-15)          ; are we at the bottom row?
     jl pf_keep_checking         ; if y is not 0, keep going
 pf_stop_falling:
     mov byte [pill_falling],0   ; clear pill falling flag
@@ -80,12 +82,35 @@ pf_fall:
 pf_done:
     ret
 
+; randomize rand variable
+; mangles ax,dx
+rng:
+    mov ax,8086
+    mul word [rand]
+    add ax,8086
+    mov [rand],ax
+    ret
+
+; put a random color from colors array into al
+; mangles ax,bx,dx
+rand_color:
+    call rng
+    mov ax,[rand]
+    xor dx,dx
+    mov bx,3
+    div bx
+    mov al,dl
+    mov bx,colors
+    cs xlat
+    ret
+
 new_pill:
-    ; TODO: randomize color
     mov byte [board+6],0x03
-    mov byte [board+7],PILL_RED
+    call rand_color
+    mov byte [board+7],al
     mov byte [board+8],0x04
-    mov byte [board+9],PILL_BLUE
+    call rand_color
+    mov byte [board+9],al
     mov word [cur_pill_loc],6
     mov byte [cur_pill_rot],0
     mov byte [pill_falling],1 
@@ -309,5 +334,8 @@ border_mask:
     dw 0b0000001111001111
     dw 0b0000001000000001
     dw 0b0000001111111111
+
+colors:
+    db PILL_YELLOW, PILL_RED, PILL_BLUE
 
 %include "end.asm"
