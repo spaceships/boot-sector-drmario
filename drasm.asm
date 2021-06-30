@@ -8,9 +8,9 @@
     bits 16
 
 base:       equ 0xfc80
-tmp0:       equ base
-tmp1:       equ tmp0 + 2  
-old_time:   equ tmp1 + 2        ; [word] last time we got from int
+tmp_byte:   equ base
+tmp_word:   equ tmp_byte + 1
+old_time:   equ tmp_word + 2    ; [word] last time we got from int
 rand:       equ old_time + 2    ; [word] rng seed
 pill_falling:   equ rand + 2    ; [byte] is a pill falling
 cur_pill_loc:   equ pill_falling + 1 ; [word] loc of current pill
@@ -202,21 +202,21 @@ draw_sprite:
     push dx
     push si
     push di
-    mov [tmp0],bh   ; tmp0 = color
-    mov [tmp1],ax   ; save ax (x,y) before clobbering ax
+    mov [tmp_byte],bh   ; tmp_byte = color
+    mov [tmp_word],ax   ; save ax (x,y) before clobbering ax
     ; compute the base index of the sprite
     mov al,8
     mul bl
     add ax,sprites
     mov si,ax       ; si now contains the start of the sprite
-    ; mov cl,[tmp1]   ; ax = (x,y)
+    ; mov cl,[tmp_word]   ; ax = (x,y)
     ; top left PIXEL is 8*y * 320 + 8*x
     ; the following sets di to be the top left PIXEL
     mov ax,(8*320)
-    mul word [tmp1+1] ; ax = y * 320 * 8
+    mul word [tmp_word+1] ; ax = y * 320 * 8
     mov bx,ax       ; save at bx
     mov al,8
-    mul byte [tmp1] ; ax = 8*x
+    mul byte [tmp_word] ; ax = 8*x
     add ax,bx       ; ax = 8*y * 320 + 8*x
     mov di,ax       ; di contains top left PIXEL now
     ; Iterate over each pixel in the sprite
@@ -229,7 +229,7 @@ ds_row:
 ds_col:
     test cl,bl      ; is the bit set in the bitmask?
     jz ds_black     ; if it isn't, print black pixel
-    mov al,[tmp0]   ; get the saved color
+    mov al,[tmp_byte]   ; get the saved color
     jmp ds_print    ; skip the following line
 ds_black:
     mov al,BLACK
