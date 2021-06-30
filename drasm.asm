@@ -8,12 +8,14 @@
     bits 16
 
 base:       equ 0xfc80
-old_time:   equ base    ; [word] last time we got from int
-rand:       equ old_time + 2 ; [word] rng seed
-pill_falling:   equ rand + 2 ; [byte] is a pill falling
+tmp0:       equ base
+tmp1:       equ tmp0 + 2  
+old_time:   equ tmp1 + 2        ; [word] last time we got from int
+rand:       equ old_time + 2    ; [word] rng seed
+pill_falling:   equ rand + 2    ; [byte] is a pill falling
 cur_pill_loc:   equ pill_falling + 1 ; [word] loc of current pill
 cur_pill_rot:   equ cur_pill_loc + 2 ; [byte] rotation of pill:
-                             ; 0: 0, 1: 90, 2: 180, 3: 270
+                                     ; 0: 0, 1: 90, 2: 180, 3: 270
 board:      equ cur_pill_rot + 1 ; 8x16x2 low: type, high: color
 
 BLACK:          equ 0x00
@@ -40,10 +42,10 @@ start:
 game_loop:
     mov ah,0x00
     int 0x1a    ; bios clock read
-    mov [rand],dx
     cmp dx,[old_time]
     je game_loop
     mov [old_time],dx
+    mov [rand],dx
 
     cmp byte [pill_falling],0    ; see if a pill is currently falling
     jne gl_pill_falling
@@ -75,7 +77,7 @@ pf_keep_checking:
     mov word [board+bx+2],0     ; zero out old right side
 pf_fall:
     mov word ax,[board+bx]      ; fall left side
-    mov word [board+bx+16],ax   ; copy it down
+    xchg [board+bx+16],ax   ; copy it down
     mov word [board+bx],0       ; zero out old one
     add word [cur_pill_loc],16  ; update pill location
 
@@ -85,9 +87,9 @@ pf_done:
 ; randomize rand variable
 ; mangles ax,dx
 rng:
-    mov ax,80861
+    mov ax,8086
     mul word [rand]
-    add ax,80861
+    add ax,8086
     mov [rand],ax
     ret
 
@@ -129,9 +131,7 @@ db_col:
     mul bl
     pop bx
     add bx,ax       ; bx = 16*row + col*2
-    mov byte al,[board+bx]   ; bl = TYPE
-    mov byte ah,[board+bx+1] ; bh = COLOR
-    mov bx,ax
+    mov bx,[board+bx]
     mov al,dl       ; al = col
     add al,BOARD_X  ; al = col + BOARD_X
     mov ah,cl       ; ah = row
@@ -164,7 +164,6 @@ db_col:
 ; di: mask&1
 draw_outline:
     mov bx,BORDER_COLOR*256
-    xor si,si
     mov ah,BOARD_Y-2
 do_y_loop:
     mov al,BOARD_X-1
@@ -203,42 +202,34 @@ draw_sprite:
     push dx
     push si
     push di
-    xor ch,ch   ; save the color before clobbering bx
-    mov cl,bh   ; cl = color, will be saved on stack later
-    push ax     ; save ax (x,y) before clobbering ax
+    mov [tmp0],bh   ; tmp0 = color
+    mov [tmp1],ax   ; save ax (x,y) before clobbering ax
     ; compute the base index of the sprite
-    mov bh,0        ; bx = sprite index
     mov al,8
     mul bl
     add ax,sprites
-    mov si,ax   ; si contains the start of the sprite
-    pop ax      ; pop ax for the computation below
-    push cx     ; save color for later
+    mov si,ax       ; si now contains the start of the sprite
+    ; mov cl,[tmp1]   ; ax = (x,y)
     ; top left PIXEL is 8*y * 320 + 8*x
     ; the following sets di to be the top left PIXEL
-    mov cl,al       ; cl = x
-    xor bh,bh
-    mov bl,ah       ; bx = y
     mov ax,(8*320)
-    mul bx          ; ax = y * 320
+    mul word [tmp1+1] ; ax = y * 320 * 8
     mov bx,ax       ; save at bx
     mov al,8
-    mul cl          ; ax = 8*x
+    mul byte [tmp1] ; ax = 8*x
     add ax,bx       ; ax = 8*y * 320 + 8*x
     mov di,ax       ; di contains top left PIXEL now
     ; Iterate over each pixel in the sprite
-    xor dx,dx
     mov dl,0        ; dl = row
 ds_row:
     mov dh,0        ; dh = col
     cs lodsb        ; load the whole byte of the sprite into al
-    mov cl,al       ; store the sprite row in cl
+    mov cl,al       ; save it in cl
     mov bl,0x80     ; mask
 ds_col:
     test cl,bl      ; is the bit set in the bitmask?
     jz ds_black     ; if it isn't, print black pixel
-    pop ax          ; put the color in al to print
-    push ax         ; also, save it for later
+    mov al,[tmp0]   ; get the saved color
     jmp ds_print    ; skip the following line
 ds_black:
     mov al,BLACK
@@ -248,13 +239,11 @@ ds_print:
     shr bl,1        ; move mask over by 1
     cmp dh,8        ; are we done with column yet?
     jne ds_col      ; if dh != 8, jump to ds_col
-    mov ax,312      ; offset to the start of the next row
-    add di,ax       ; increment di
+    add di,312      ; increment di
     inc dl          ; row++
     cmp dl,8 
     jne ds_row      ; if row != 8, jump to ds_row
     ; function finished, cleanup follows
-    pop ax          ; clear stack - we used it to store color
     pop di
     pop si
     pop dx
