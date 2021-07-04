@@ -13,6 +13,11 @@ ifeq (gdb, $(firstword $(MAKECMDGOALS)))
   $(eval $(GDB_ARGS):;@:)
 endif
 
+ifeq (size, $(firstword $(MAKECMDGOALS)))
+  SIZE_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(SIZE_ARGS):;@:)
+endif
+
 run: $(patsubst %,%.img,$(RUN_ARGS))
 	# qemu-system-i386 -s -S -hda $^
 	qemu-system-i386 -hda $^
@@ -40,4 +45,4 @@ gdb: $(patsubst %,%.elf,$(GDB_ARGS))
 clean:
 	rm -rf *.img *.elf *.o
 
-.PHONY: run clean
+.PHONY: run clean drun size

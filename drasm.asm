@@ -23,6 +23,7 @@ PILL_RED:       equ 0x27
 PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6a
+SPEED:          equ 5
 
 BOARD_X:    equ 16
 BOARD_Y:    equ 5
@@ -40,16 +41,48 @@ start:
     mov byte [pill_falling],0
 
 game_loop:
+    ; get the player's input
+    mov ah,0x01 ; bios key available
+    int 0x16
+    mov ah,0x00
+    je gl_no_key
+    int 0x16
+    mov bx,[cur_pill_loc]
+    mov cx,[board+bx]
+gl_no_key:
+    cmp ah,0x4b ; left arrow
+    jne gl_p0
+    cmp byte [board+bx-2],0
+    jnz gl_nokey
+    mov [board+bx-2],cx
+    mov [board+bx],0
+    jmp gl_redraw
+gl_p0:
+    cmp ah,0x4d ; right arrow
+    jne gl_p1
+    ;; TODO move right
+gl_p1:
+    cmp ah,0x50 ; down arrow
+    jne gl_nokey
+    call pillfall 
+gl_redraw:
+    call draw_board
+gl_nokey:
+    
+    ; clock stuff follows
     mov ah,0x00
     int 0x1a    ; bios clock read
     cmp dx,[old_time]
-    je game_loop
+    jle game_loop
     mov [old_time],dx
     mov [rand],dx
+    add word [old_time],SPEED
+
+gl_skip_clock:
 
     cmp byte [pill_falling],0    ; see if a pill is currently falling
     jne gl_pill_falling
-    call new_pill ; no pill falling, make a new pill
+    call new_pill                ; no pill falling, make a new pill
 gl_pill_falling:
     call pillfall  
     call draw_board
@@ -57,6 +90,8 @@ gl_pill_falling:
 
 ; Make a pill fall if it can
 pillfall:
+    cmp byte [pill_falling],0    ; see if a pill is currently falling
+    je pf_done
     ; Checking whether we are done
     mov bx,[cur_pill_loc]
     cmp bx,(16*8*2-15)          ; are we at the bottom row?
@@ -80,7 +115,6 @@ pf_fall:
     xchg [board+bx+16],ax   ; copy it down
     mov word [board+bx],0       ; zero out old one
     add word [cur_pill_loc],16  ; update pill location
-
 pf_done:
     ret
 
