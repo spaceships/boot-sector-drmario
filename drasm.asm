@@ -10,8 +10,8 @@
 base:       equ 0xfc80
 tmp_byte:   equ base
 tmp_word:   equ tmp_byte + 1
-old_time:   equ tmp_word + 2    ; [word] last time we got from int
-rand:       equ old_time + 2    ; [word] rng seed
+next_tick:  equ tmp_word + 2    ; [word] last time we got from int
+rand:       equ next_tick + 2    ; [word] rng seed
 pill_falling:   equ rand + 2    ; [byte] is a pill falling
 cur_pill_loc:   equ pill_falling + 1 ; [word] loc of current pill
 cur_pill_rot:   equ cur_pill_loc + 2 ; [byte] rotation of pill:
@@ -23,7 +23,7 @@ PILL_RED:       equ 0x27
 PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6a
-SPEED:          equ 5
+SPEED:          equ 4
 
 BOARD_X:    equ 16
 BOARD_Y:    equ 5
@@ -38,7 +38,7 @@ start:
 
     call draw_outline
 
-    mov byte [pill_falling],0
+    ; mov byte [pill_falling],0
 
 game_loop:
     ; get the player's input
@@ -55,16 +55,16 @@ gl_no_key:
     cmp byte [board+bx-2],0
     jnz gl_nokey
     mov [board+bx-2],cx
-    mov [board+bx],0
+    mov word [board+bx],0
     jmp gl_redraw
 gl_p0:
-    cmp ah,0x4d ; right arrow
-    jne gl_p1
-    ;; TODO move right
-gl_p1:
-    cmp ah,0x50 ; down arrow
-    jne gl_nokey
-    call pillfall 
+;     cmp ah,0x4d ; right arrow
+;     jne gl_p1
+;     ;; TODO move right
+; gl_p1:
+;     cmp ah,0x50 ; down arrow
+;     jne gl_nokey
+;     call pillfall 
 gl_redraw:
     call draw_board
 gl_nokey:
@@ -72,14 +72,13 @@ gl_nokey:
     ; clock stuff follows
     mov ah,0x00
     int 0x1a    ; bios clock read
-    cmp dx,[old_time]
-    jle game_loop
-    mov [old_time],dx
+    cmp dx,[next_tick]
+    jb game_loop
+    add dx,SPEED
+    mov [next_tick],dx
     mov [rand],dx
-    add word [old_time],SPEED
 
 gl_skip_clock:
-
     cmp byte [pill_falling],0    ; see if a pill is currently falling
     jne gl_pill_falling
     call new_pill                ; no pill falling, make a new pill
@@ -93,8 +92,7 @@ pillfall:
     cmp byte [pill_falling],0    ; see if a pill is currently falling
     je pf_done
     ; Checking whether we are done
-    mov bx,[cur_pill_loc]
-    cmp bx,(16*8*2-15)          ; are we at the bottom row?
+    cmp word [cur_pill_loc],(16*8*2-15) ; are we at the bottom row?
     jl pf_keep_checking         ; if y is not 0, keep going
 pf_stop_falling:
     mov byte [pill_falling],0   ; clear pill falling flag
@@ -179,23 +177,6 @@ db_col:
     jne db_row 
     ret
 
-; i = 0
-; for y in 0..18 {
-;   x=BOARD_X-1
-;   mask=(word)board_mask[i]
-;   do {
-;         if mask&1 { draw_sprite(x, BOARD_Y-2+y) }
-;         x++
-;         mask >>= 1
-;     } while mask != 0
-;   if y<2 || y>16 { i+=2 }
-; }
-; al: BOARD_X-1+x
-; ah: BOARD_Y-2+y
-; bx: draw_sprite args
-; cx: mask
-; si: i
-; di: mask&1
 draw_outline:
     mov bx,BORDER_COLOR*256
     mov ah,BOARD_Y-2
@@ -360,4 +341,5 @@ border_mask:
 colors:
     db PILL_YELLOW, PILL_RED, PILL_BLUE
 
-%include "end.asm"
+times 510 - ($ - $$) db 0
+dw 0xAA55
