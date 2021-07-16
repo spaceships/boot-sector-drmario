@@ -7,12 +7,13 @@ cur_pill_rot:   equ cur_pill_loc + 2    ; [byte]
 next_tick:      equ cur_pill_rot + 1    ; [word]
 rand:           equ next_tick + 2       ; [word]
 
-BLACK:          equ 0x00
+BLACK:          equ 0xFF
 PILL_RED:       equ 0x27
 PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6a
 SPEED:          equ 4
+VIRUS_COUNT:    equ 8
 
 BOARD_START:    equ 5*8*320 + 16*8 ; start board at 16,5
 
@@ -26,6 +27,12 @@ start:
 
     call draw_outline
 
+    mov ah,0x00
+    int 0x1a      ; bios clock read
+    mov [rand],dx ; initialize rand
+
+    call place_virii
+
 game_loop:
     mov ah,0x00
     int 0x1a    ; bios clock read
@@ -33,7 +40,6 @@ game_loop:
     jb game_loop
     add dx,SPEED
     mov [next_tick],dx
-    mov [rand],dx
 
     cmp word [cur_pill_loc],0
     jne gl_pill
@@ -55,23 +61,23 @@ pf_stop_falling:
     jmp pf_done
 pf_keep_checking:
     mov bx,[cur_pill_loc]
-    cmp byte [bx+320*8],0 ; is there something below?
+    cmp byte [bx+8*320],0 ; is there something below?
     jne pf_stop_falling         ; if there is, stop falling
     ; If pill is horizontal, check if right is filled too
     and byte [cur_pill_rot],1   ; is cur_pill_rot odd? 
     jnz pf_fall_virt            ; if odd, fall vertically
-    cmp byte [bx+320*8+1],0 ; otherwise is there something on the right, below?
+    cmp byte [bx+8*320+8],0 ; otherwise is there something on the right, below?
     jne pf_stop_falling         ; if there is, stop falling
     ; fall horizontally
-    mov si,bx
-    call move_sprite_down
-    add bx,8
-    jmp pf_fall_done
+    push 8  ; other part of sprite is to the right
+    jmp pf_fall
 pf_fall_virt:
+    push -320*8 ; other part of sprite is above
+pf_fall:
     mov si,bx
     call move_sprite_down
-    sub bx,320*8
-pf_fall_done:
+    pop cx
+    add bx,cx
     mov si,bx
     call move_sprite_down
     add word [cur_pill_loc],320*8
@@ -83,14 +89,12 @@ move_sprite_down:
     mov di,si
     add di,320*8
     mov cx,8
-    mov al,0
 csd_outer_loop:
     push cx
     mov cx,8
 csd_inner_loop:
-    lodsb ; al = [si++]
+    movsb ; [di++] = [si++]
     mov byte [si-1],0
-    stosb ; [di++] = al
     loop csd_inner_loop
     add si,312
     add di,312
@@ -101,9 +105,9 @@ csd_inner_loop:
 ; randomize rand variable
 ; mangles ax,dx
 rng:
-    mov ax,8086
+    mov ax,80861
     mul word [rand]
-    add ax,8086
+    add ax,80861
     mov [rand],ax
     ret
 
@@ -130,6 +134,37 @@ new_pill:
     call draw_sprite
     mov word [cur_pill_loc],BOARD_START+3*8
     mov byte [cur_pill_rot],0
+    ret
+
+place_virii:
+    mov bx,0 ; bx: virus count
+    mov di,BOARD_START+15*8*320+7*8 ; start at bottom right
+pv_row:
+    mov cx,8
+pv_loop:
+    call rng
+    cmp byte al,225
+    jb pv_continue
+    push bx
+    push di
+    push cx
+    call rand_color
+    mov si,sprites+6*8
+    call draw_sprite
+    pop cx
+    pop di
+    pop bx
+    inc bx; increment virus count
+pv_continue:
+    cmp bx,VIRUS_COUNT
+    je pv_done
+    sub di,8
+    ; if cx is 0, then subtract row
+    loop pv_loop
+    sub di,8*320-8*8
+    cmp di,BOARD_START
+    ja pv_row
+pv_done:
     ret
 
 ; [sprite_color]: color
