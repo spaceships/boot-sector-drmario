@@ -80,39 +80,22 @@ pf_done:
 
 ; si: source
 move_sprite_down:
-    call copy_sprite_down 
-    mov di,si
-    sub di,8*320
-    call clear_sprite
-    ret
-
-; si: source
-copy_sprite_down:
     mov di,si
     add di,320*8
-    mov dl,8
-    mov al,0
-csd_loop:
     mov cx,8
-    rep movsb
-    add di,312
+    mov al,0
+csd_outer_loop:
+    push cx
+    mov cx,8
+csd_inner_loop:
+    lodsb ; al = [si++]
+    mov byte [si-1],0
+    stosb ; [di++] = al
+    loop csd_inner_loop
     add si,312
-    dec dl
-    cmp dl,0
-    jne csd_loop
-    ret
-     
-; di: target
-clear_sprite:
-    mov al,0
-    mov dl,8
-cs_loop:
-    mov cx,8
-    rep stosb
     add di,312
-    dec dl
-    cmp dl,0
-    jne cs_loop
+    pop cx
+    loop csd_outer_loop
     ret
      
 ; randomize rand variable
@@ -154,29 +137,25 @@ new_pill:
 ; si; start of sprite
 ; clobbered: ax, bx, cx, dx, di, si
 draw_sprite:
-    mov dl,0        ; dl = row
+    mov cx,8
 ds_row:
-    mov dh,0        ; dh = col
+    push cx
+    mov cx,8
     cs lodsb        ; load the whole byte of the sprite into al, advance si
-    mov cl,al       ; save it in cl
+    mov dl,al       ; save it in dl
     mov bl,0x80     ; mask
 ds_col:
-    test cl,bl      ; is the bit set in the bitmask?
-    jz ds_black     ; if it isn't, print black pixel
-    mov al,[sprite_color] ; get the saved color
-    jmp ds_print    ; skip the following line
-ds_black:
     mov al,BLACK
+    test dl,bl      ; is the bit set in the bitmask?
+    jz ds_print    ; if it isn't, just print black pixel
+    mov al,[sprite_color] ; get the saved color
 ds_print:
     stosb           ; print color to current pixel loc
-    inc dh          ; col++
     shr bl,1        ; move mask over by 1
-    cmp dh,8        ; are we done with column yet?
-    jne ds_col      ; if dh != 8, jump to ds_col
+    loop ds_col
     add di,312      ; increment di
-    inc dl          ; row++
-    cmp dl,8 
-    jne ds_row      ; if row != 8, jump to ds_row
+    pop cx
+    loop ds_row      ; if row != 8, jump to ds_row
     ret
 
 draw_outline:
