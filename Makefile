@@ -33,6 +33,14 @@ gdb: $(patsubst %,%.elf,$(GDB_ARGS))
 			-ex 'break start' \
 			-ex 'continue'
 
+size: $(SIZE_ARGS)
+	@perl -nE 'print unless /times 510|dw 0xaa55/' $^.asm > tmp.asm
+	@nasm -f elf32 -g3 -F dwarf tmp.asm -o tmp.o
+	@ld.lld -Ttext=0x7c00 -melf_i386 tmp.o -o tmp.elf 2>/dev/null
+	@llvm-objcopy -O binary tmp.elf tmp.img
+	@wc -c < tmp.img
+	@rm tmp.*
+
 %.o: %.asm
 	nasm -f elf32 -g3 -F dwarf $^ -o $@
 

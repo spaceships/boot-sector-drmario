@@ -25,13 +25,12 @@ start:
     mov ds,ax
     mov es,ax
 
-    call draw_outline
-
     mov ah,0x00
     int 0x1a      ; bios clock read
     mov [rand],dx ; initialize rand
 
     call place_virii
+    call draw_outline
 
 game_loop:
     mov ah,0x00
@@ -53,15 +52,15 @@ end:
     jmp end
 
 pillfall:
+    mov bx,[cur_pill_loc]
     ; Checking whether we are done
-    cmp word [cur_pill_loc],BOARD_START+16*8*320 ; are we at the bottom row?
+    cmp bx,BOARD_START+16*8*320 ; are we at the bottom row?
     jc pf_keep_checking                          ; if y is not 0, keep going
 pf_stop_falling:
     mov word [cur_pill_loc],0   ; stop falling
     jmp pf_done
 pf_keep_checking:
-    mov bx,[cur_pill_loc]
-    cmp byte [bx+8*320],0 ; is there something below?
+    cmp byte [bx+8*320],0       ; is there something below?
     jne pf_stop_falling         ; if there is, stop falling
     ; If pill is horizontal, check if right is filled too
     and byte [cur_pill_rot],1   ; is cur_pill_rot odd? 
@@ -102,34 +101,34 @@ csd_inner_loop:
     loop csd_outer_loop
     ret
      
-; randomize rand variable
-; mangles ax,dx
+; lfsr, sets ax, clobbers bx
 rng:
-    mov ax,80861
-    mul word [rand]
-    add ax,80861
+    mov ax,[rand]
+    mov bx,ax
+    and bx,0b1000000000101101
+    shr ax,1
+    xor bl,bh
+    jpe rng_done
+    or ax,0x8000
+rng_done:
     mov [rand],ax
     ret
 
-; put a random color from colors array into [sprite_color]
+; put a random color from colors array into ah
 ; mangles ax,bx,dx
 rand_color:
-    call rng    ; sets ax
-    xor dx,dx
-    mov bx,3
-    div bx
-    mov al,dl   ; al = remainder
-    mov bx,colors
+    call rng
+    and al,3
+    jz rand_color
+    mov bx,colors-1
     cs xlat     ; al = [colors + al]
-    mov [sprite_color],al
+    mov ah,al
     ret
 
 new_pill:
-    call rand_color
     mov si,sprites+2*8
     mov di,BOARD_START+3*8
     call draw_sprite
-    call rand_color
     mov di,BOARD_START+4*8
     call draw_sprite
     mov word [cur_pill_loc],BOARD_START+3*8
@@ -137,26 +136,23 @@ new_pill:
     ret
 
 place_virii:
-    mov bx,0 ; bx: virus count
+    mov dx,0 ; bx: virus count
     mov di,BOARD_START+15*8*320+7*8 ; start at bottom right
 pv_row:
     mov cx,8
 pv_loop:
     call rng
-    cmp byte al,225
+    cmp al,210
     jb pv_continue
-    push bx
-    push di
     push cx
-    call rand_color
+    push di
     mov si,sprites+6*8
     call draw_sprite
-    pop cx
     pop di
-    pop bx
-    inc bx; increment virus count
+    pop cx
+    inc dx; increment virus count
 pv_continue:
-    cmp bx,VIRUS_COUNT
+    cmp dx,VIRUS_COUNT
     je pv_done
     sub di,8
     ; if cx is 0, then subtract row
@@ -167,30 +163,29 @@ pv_continue:
 pv_done:
     ret
 
-; [sprite_color]: color
+; draw_sprite gives the sprite a random color
 ; di: top left pixel
 ; si; start of sprite
-; clobbered: ax, bx, cx, dx, di, si
+; clobbered: ax, bx, cx, di, si
 draw_sprite:
+    call rand_color
     mov cx,8
 ds_row:
     push cx
     mov cx,8
     cs lodsb        ; load the whole byte of the sprite into al, advance si
-    mov dl,al       ; save it in dl
-    mov bl,0x80     ; mask
+    mov bl,al       ; save it in dl
 ds_col:
     mov al,BLACK
-    test dl,bl      ; is the bit set in the bitmask?
-    jz ds_print    ; if it isn't, just print black pixel
-    mov al,[sprite_color] ; get the saved color
+    shl bl,1
+    jnc ds_print    ; if we just shifted off a 0, print black pixel
+    mov al,ah       ; otherwise get the color
 ds_print:
     stosb           ; print color to current pixel loc
-    shr bl,1        ; move mask over by 1
     loop ds_col
     add di,312      ; increment di
     pop cx
-    loop ds_row      ; if row != 8, jump to ds_row
+    loop ds_row     ; if row != 8, jump to ds_row
     ret
 
 draw_outline:
