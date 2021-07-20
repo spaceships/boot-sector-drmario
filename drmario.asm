@@ -13,7 +13,7 @@ PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6a
 SPEED:          equ 4
-VIRUS_COUNT:    equ 8
+VIRUS_COUNT:    equ 4
 
 BOARD_START:    equ 5*8*320 + 16*8 ; start board at 16,5
 
@@ -31,8 +31,35 @@ start:
 
     call place_virii
     call draw_outline
+    call new_pill
 
 game_loop:
+    ; get the player's input
+    mov ah,0x01 ; bios key available
+    int 0x16
+    mov ah,0x00
+    je gl_check_left
+    int 0x16
+gl_check_left:
+    cmp ah,0x4b ; left arrow
+    jne gl_check_right
+    call pillleft
+gl_check_right:
+    cmp ah,0x4d ; right arrow
+    jne gl_check_down
+    call pillright
+gl_check_down:
+    cmp ah,0x50 ; down arrow
+    jne gl_check_a
+    call pillfall 
+gl_check_a:
+    cmp ah,0x1e ; 'a'
+    jne gl_nokey
+    call pillrot
+    ; cmp ah,0x1f ; 's'
+gl_nokey:
+
+    ; clock stuff
     mov ah,0x00
     int 0x1a    ; bios clock read
     cmp dx,[next_tick]
@@ -40,53 +67,84 @@ game_loop:
     add dx,SPEED
     mov [next_tick],dx
 
-    cmp word [cur_pill_loc],0
-    jne gl_pill
-    call new_pill
-gl_pill:
     call pillfall
     jmp game_loop
 
-end:
-    hlt
-    jmp end
+pillrot:
+    ret
+    ; cmp byte [cur_pill_rot],0
+    ; je pr_horiz
+    ; ret
+; pr_horiz:
+    ; mov si,[cur_pill_loc] 
+    ; mov di,si
+    ; sub di,8*320
+    ; add si,8
+    ; jmp move_sprite
 
 pillfall:
-    mov bx,[cur_pill_loc]
+    mov si,[cur_pill_loc]
     ; Checking whether we are done
-    cmp bx,BOARD_START+16*8*320 ; are we at the bottom row?
-    jc pf_keep_checking                          ; if y is not 0, keep going
-pf_stop_falling:
-    mov word [cur_pill_loc],0   ; stop falling
-    jmp pf_done
-pf_keep_checking:
-    cmp byte [bx+8*320],0       ; is there something below?
-    jne pf_stop_falling         ; if there is, stop falling
-    ; If pill is horizontal, check if right is filled too
-    and byte [cur_pill_rot],1   ; is cur_pill_rot odd? 
-    jnz pf_fall_virt            ; if odd, fall vertically
-    cmp byte [bx+8*320+8],0 ; otherwise is there something on the right, below?
-    jne pf_stop_falling         ; if there is, stop falling
-    ; fall horizontally
-    push 8  ; other part of sprite is to the right
+    cmp si,BOARD_START+16*8*320 ; are we at the bottom row?
+    jnc new_pill                ; if y is 0, stop falling
+    cmp byte [si+8*320],0       ; is there something below?
+    jne new_pill                ; if there is, stop falling
+    test byte [cur_pill_rot],1  ; is pill rotated?
+    jnz pf_fall_virt            ; if not, fall vertically
+    cmp byte [si+8*320+8],0     ; anything on the right, below?
+    jne new_pill                ; if there is, stop falling
+    mov dx,8  ; other part of sprite is to the right
     jmp pf_fall
 pf_fall_virt:
-    push -320*8 ; other part of sprite is above
+    mov dx,-320*8 ; other part of sprite is above
 pf_fall:
-    mov si,bx
-    call move_sprite_down
-    pop cx
-    add bx,cx
-    mov si,bx
-    call move_sprite_down
-    add word [cur_pill_loc],320*8
-pf_done:
+    mov ax,320*8
+    jmp pm_move
+
+pillright:
+    mov ax,8
+    mov bx,8
+    test byte [cur_pill_rot],1
+    jnz pillmove
+    mov bx,16
+    jmp pillmove
+
+pillleft:
+    mov ax,-8
+    mov bx,-1
+
+; ax: moving offset
+; bx: checking offset
+pillmove:
+    mov si,[cur_pill_loc]
+    test byte [si+bx],0xFF
+    jnz pm_done
+    mov dx,8
+    test byte [cur_pill_rot],1 ; are we rotated?
+    jz pm_move
+    mov dx,-8*320
+    cmp byte [si+bx-8*320],0 ; above to the left/right?
+    jne pm_done
+pm_move:
+    mov di,0                ; save left part of pill
+    call move_sprite
+    mov si,[cur_pill_loc]   ; move right/up part of pill
+    add si,dx
+    mov di,si
+    add di,ax
+    call move_sprite
+    mov si,0                ; restore left part
+    mov di,[cur_pill_loc]
+    add di,ax
+    call move_sprite
+    add word [cur_pill_loc],ax
+pm_done:
     ret
 
 ; si: source
-move_sprite_down:
-    mov di,si
-    add di,320*8
+; di: target
+; clobbers cx, si, di
+move_sprite:
     mov cx,8
 csd_outer_loop:
     push cx
@@ -100,7 +158,7 @@ csd_inner_loop:
     pop cx
     loop csd_outer_loop
     ret
-     
+
 ; lfsr, sets ax, clobbers bx
 rng:
     mov ax,[rand]
@@ -126,12 +184,16 @@ rand_color:
     ret
 
 new_pill:
+    ; mov si,sprites+1*8
     mov si,sprites+2*8
     mov di,BOARD_START+3*8
     call draw_sprite
     mov di,BOARD_START+4*8
+    ; mov si,sprites
+    ; mov di,BOARD_START-8*320+3*8
     call draw_sprite
     mov word [cur_pill_loc],BOARD_START+3*8
+    ; mov byte [cur_pill_rot],1
     mov byte [cur_pill_rot],0
     ret
 
