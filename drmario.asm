@@ -3,8 +3,8 @@
 base:           equ 0xfc80
 sprite_color:   equ base                ; [byte]
 cur_pill_loc:   equ sprite_color + 1    ; [word]
-cur_pill_rot:   equ cur_pill_loc + 2    ; [byte]
-next_tick:      equ cur_pill_rot + 1    ; [word]
+pill_offset:    equ cur_pill_loc + 2    ; [word]
+next_tick:      equ pill_offset + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 
 BLACK:          equ 0xFF
@@ -29,11 +29,48 @@ start:
     int 0x1a      ; bios clock read
     mov [rand],dx ; initialize rand
 
-    call place_virii
+    ;;;;; place virii
+    mov dx,0 ; bx: virus count
+    mov di,BOARD_START+15*8*320+7*8 ; start at bottom right
+pv_row:
+    mov cx,8
+pv_loop:
+    call rng
+    cmp al,210
+    jb pv_continue
+    push cx
+    push di
+    mov si,sprites+6*8
+    call draw_sprite
+    pop di
+    pop cx
+    inc dx; increment virus count
+pv_continue:
+    cmp dx,VIRUS_COUNT
+    je pv_done
+    sub di,8
+    ; if cx is 0, then subtract row
+    loop pv_loop
+    sub di,8*320-8*8
+    cmp di,BOARD_START
+    ja pv_row
+pv_done:
+    ;;; done placing virii
+
     call draw_outline
     call new_pill
 
 game_loop:
+    ;;; User input
+    ; precompute first offset for R and second offset for LR
+    mov bx,16       ; R: check 16 pixels over
+    xor cx,cx       ; LR/horiz: only check 1 place
+    cmp word [pill_offset],8 ; horizontal?
+    je gl_offset_ok
+    shr bx,1        ; vertical, div bx by 2
+    mov cx,-8*320   ; second checking offset is above
+gl_offset_ok:
+
     ; get the player's input
     mov ah,0x01 ; bios key available
     int 0x16
@@ -43,22 +80,25 @@ game_loop:
 gl_check_left:
     cmp ah,0x4b ; left arrow
     jne gl_check_right
-    call pillleft
+    mov ax,-8
+    mov bx,ax
+    call pillmove
 gl_check_right:
     cmp ah,0x4d ; right arrow
     jne gl_check_down
-    call pillright
+    mov ax,8
+    call pillmove
 gl_check_down:
     cmp ah,0x50 ; down arrow
     jne gl_check_a
     call pillfall 
 gl_check_a:
     cmp ah,0x1e ; 'a'
-    jne gl_nokey
+    jne gl_clock
     call pillrot
     ; cmp ah,0x1f ; 's'
-gl_nokey:
 
+gl_clock:
     ; clock stuff
     mov ah,0x00
     int 0x1a    ; bios clock read
@@ -71,74 +111,69 @@ gl_nokey:
     jmp game_loop
 
 pillrot:
+    cmp word [pill_offset],8
+    je pr_horiz
     ret
-    ; cmp byte [cur_pill_rot],0
-    ; je pr_horiz
-    ; ret
-; pr_horiz:
-    ; mov si,[cur_pill_loc] 
-    ; mov di,si
-    ; sub di,8*320
-    ; add si,8
-    ; jmp move_sprite
+pr_horiz:
+    mov word [pill_offset],-8*320
+    mov si,[cur_pill_loc] 
+    mov di,si
+    sub di,8*320
+    add si,8
+    jmp move_sprite
 
 pillfall:
-    mov si,[cur_pill_loc]
-    ; Checking whether we are done
-    cmp si,BOARD_START+16*8*320 ; are we at the bottom row?
-    jnc new_pill                ; if y is 0, stop falling
-    cmp byte [si+8*320],0       ; is there something below?
-    jne new_pill                ; if there is, stop falling
-    test byte [cur_pill_rot],1  ; is pill rotated?
-    jnz pf_fall_virt            ; if not, fall vertically
-    cmp byte [si+8*320+8],0     ; anything on the right, below?
-    jne new_pill                ; if there is, stop falling
-    mov dx,8  ; other part of sprite is to the right
-    jmp pf_fall
-pf_fall_virt:
-    mov dx,-320*8 ; other part of sprite is above
-pf_fall:
-    mov ax,320*8
-    jmp pm_move
-
-pillright:
-    mov ax,8
-    mov bx,8
-    test byte [cur_pill_rot],1
-    jnz pillmove
-    mov bx,16
-    jmp pillmove
-
-pillleft:
-    mov ax,-8
-    mov bx,-1
+    mov ax,8*320
+    mov bx,ax
+    mov cx,8
+    cmp byte [pill_offset],8
+    je pf_call
+    xor cx,cx
+pf_call:
+    call pillmove
+    jz pf_done
+    call new_pill
+pf_done:
+    ret
 
 ; ax: moving offset
-; bx: checking offset
+; bx: checking offset 1
+; cx: checking offset 2 (in addition to bx)
 pillmove:
-    mov si,[cur_pill_loc]
-    test byte [si+bx],0xFF
+    mov dx,[cur_pill_loc]
+    mov di,dx
+    add di,bx ; add in the testing offset 1
+pm_test:
+    call occ
     jnz pm_done
-    mov dx,8
-    test byte [cur_pill_rot],1 ; are we rotated?
-    jz pm_move
-    mov dx,-8*320
-    cmp byte [si+bx-8*320],0 ; above to the left/right?
-    jne pm_done
+    add di,cx
+    call occ
+    jnz pm_done
 pm_move:
-    mov di,0                ; save left part of pill
-    call move_sprite
-    mov si,[cur_pill_loc]   ; move right/up part of pill
-    add si,dx
+    pushf
+    xor di,di
+    mov si,dx
+    call move_sprite        ; save left part
+    mov si,dx               ; move right/up part of pill
+    add si,[pill_offset]
     mov di,si
     add di,ax
     call move_sprite
-    mov si,0                ; restore left part
-    mov di,[cur_pill_loc]
+    xor si,si               ; restore left part
+    mov di,dx
     add di,ax
     call move_sprite
     add word [cur_pill_loc],ax
+    popf
 pm_done:
+    ret
+
+; occupied(di) ZF=0 if occupied
+occ:
+    test byte [di],0xFF ; top left corner
+    jnz occ_done
+    test byte [di+7*320+7],0xFF ; bottom right corner
+occ_done:
     ret
 
 ; si: source
@@ -184,45 +219,13 @@ rand_color:
     ret
 
 new_pill:
-    ; mov si,sprites+1*8
     mov si,sprites+2*8
     mov di,BOARD_START+3*8
     call draw_sprite
     mov di,BOARD_START+4*8
-    ; mov si,sprites
-    ; mov di,BOARD_START-8*320+3*8
     call draw_sprite
     mov word [cur_pill_loc],BOARD_START+3*8
-    ; mov byte [cur_pill_rot],1
-    mov byte [cur_pill_rot],0
-    ret
-
-place_virii:
-    mov dx,0 ; bx: virus count
-    mov di,BOARD_START+15*8*320+7*8 ; start at bottom right
-pv_row:
-    mov cx,8
-pv_loop:
-    call rng
-    cmp al,210
-    jb pv_continue
-    push cx
-    push di
-    mov si,sprites+6*8
-    call draw_sprite
-    pop di
-    pop cx
-    inc dx; increment virus count
-pv_continue:
-    cmp dx,VIRUS_COUNT
-    je pv_done
-    sub di,8
-    ; if cx is 0, then subtract row
-    loop pv_loop
-    sub di,8*320-8*8
-    cmp di,BOARD_START
-    ja pv_row
-pv_done:
+    mov word [pill_offset],8
     ret
 
 ; draw_sprite gives the sprite a random color
