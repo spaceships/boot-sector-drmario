@@ -1,8 +1,7 @@
     bits 16
 
 base:           equ 0xfc80
-sprite_color:   equ base                ; [byte]
-cur_pill_loc:   equ sprite_color + 1    ; [word]
+cur_pill_loc:   equ base                ; [word]
 pill_offset:    equ cur_pill_loc + 2    ; [word]
 next_tick:      equ pill_offset + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
@@ -29,7 +28,9 @@ start:
     int 0x1a      ; bios clock read
     mov [rand],dx ; initialize rand
 
-    ;;;;; place virii
+    ;;;;;;;;;;;;;;;;;
+    ;; place virii ;;
+    ;;;;;;;;;;;;;;;;;
     mov dx,0 ; bx: virus count
     mov di,BOARD_START+15*8*320+7*8 ; start at bottom right
 pv_row:
@@ -41,7 +42,7 @@ pv_loop:
     push cx
     push di
     mov si,sprites+6*8
-    call draw_sprite
+    call draw_sprite_rand_color
     pop di
     pop cx
     inc dx; increment virus count
@@ -55,23 +56,45 @@ pv_continue:
     cmp di,BOARD_START
     ja pv_row
 pv_done:
-    ;;; done placing virii
 
-    call draw_outline
-    call new_pill
+    ;;;;;;;;;;;;;;;;;;
+    ;; draw outline ;;
+    ;;;;;;;;;;;;;;;;;;
+    mov al,BORDER_COLOR
+    mov di,BOARD_START-320-1
+    mov cx,16*8+1
+do_virt_lines:
+    stosb
+    add di,8*8
+    stosb
+    add di,320-8*8-2
+    loop do_virt_lines
+    mov di,BOARD_START-320-1
+    mov cx,8*8+2
+    rep stosb
+    mov di,BOARD_START+16*8*320-1
+    mov cx,8*8+2
+    rep stosb
+
+    ;;;;;;;;;;;;;;;;;;
+    ;; make a pill! ;;
+    ;;;;;;;;;;;;;;;;;;
+    call pillnew
 
 game_loop:
-    ;;; User input
+    ;;;;;;;;;;;;;;;;
+    ;; user input ;;
+    ;;;;;;;;;;;;;;;;
+
     ; precompute first offset for R and second offset for LR
-    mov bx,16       ; R: check 16 pixels over
+    mov bx,8        
+    mov cx,[pill_offset]
+    test cx,cx ; is pill offset negative? pill veritcal?
+    js gl_offset_ok
+    shl bx,1        ; R horizontal, mul bx by 2
     xor cx,cx       ; LR/horiz: only check 1 place
-    cmp word [pill_offset],8 ; horizontal?
-    je gl_offset_ok
-    shr bx,1        ; vertical, div bx by 2
-    mov cx,-8*320   ; second checking offset is above
 gl_offset_ok:
 
-    ; get the player's input
     mov ah,0x01 ; bios key available
     int 0x16
     mov ah,0x00
@@ -99,7 +122,9 @@ gl_check_a:
     ; cmp ah,0x1f ; 's'
 
 gl_clock:
-    ; clock stuff
+    ;;;;;;;;;;;;;;;;
+    ;; game clock ;;
+    ;;;;;;;;;;;;;;;;
     mov ah,0x00
     int 0x1a    ; bios clock read
     cmp dx,[next_tick]
@@ -109,32 +134,52 @@ gl_clock:
 
     call pillfall
     jmp game_loop
+    ;;;;;;;;;;;;;
+    ;; the end ;;
+    ;;;;;;;;;;;;;
 
-pillrot:
-    cmp word [pill_offset],8
-    je pr_horiz
+pillnew:
+    mov si,sprites+2*8
+    mov di,BOARD_START+3*8
+    call draw_sprite_rand_color
+    mov di,BOARD_START+4*8
+    call draw_sprite_rand_color
+    mov word [cur_pill_loc],BOARD_START+3*8
+    mov word [pill_offset],8
     ret
-pr_horiz:
-    mov word [pill_offset],-8*320
-    mov si,[cur_pill_loc] 
-    mov di,si
-    sub di,8*320
-    add si,8
-    jmp move_sprite
 
 pillfall:
     mov ax,8*320
     mov bx,ax
-    mov cx,8
-    cmp byte [pill_offset],8
-    je pf_call
-    xor cx,cx
+    mov cx,[pill_offset] ; cx will be 8 or -8*320
+    test cx,cx  ; if cx is negative, cancel it out
+    jns pf_call ; because we only have to test 1 loc
+    xor cx,cx   ; when falling with vertical pill
 pf_call:
-    call pillmove
-    jz pf_done
-    call new_pill
+    call pillmove 
+    jz pf_done    ; pillmove sets ZF when it is successful
+    call pillnew  ; not successful, make a new pill
 pf_done:
     ret
+
+pillrot:
+    mov ax,[pill_offset]
+    mov bx,8
+    test ax,ax          ; if we are rotated
+    js pr_test
+    mov bx,-8*320       ; set the other to above
+pr_test:
+    xchg ax,bx          ; exchange from/to
+    mov si,[cur_pill_loc] 
+    mov di,si
+    add di,ax
+    add si,bx
+    call occ            ; is "to" occupied?
+    jz pr_ok
+    ret
+pr_ok:
+    mov [pill_offset],ax ; actually change offset
+    jmp move_sprite     ; move the sprite
 
 ; ax: moving offset
 ; bx: checking offset 1
@@ -194,6 +239,32 @@ csd_inner_loop:
     loop csd_outer_loop
     ret
 
+draw_sprite_rand_color:
+    call rand_color
+; draw_sprite gives the sprite a random color
+; di: top left pixel
+; si; start of sprite
+; clobbered: ax, bx, cx, di, si
+draw_sprite:
+    mov cx,8
+ds_row:
+    push cx
+    mov cx,8
+    cs lodsb        ; load the whole byte of the sprite into al, advance si
+    mov bl,al       ; save it in dl
+ds_col:
+    mov al,BLACK
+    shl bl,1
+    jnc ds_print    ; if we just shifted off a 0, print black pixel
+    mov al,ah       ; otherwise get the color
+ds_print:
+    stosb           ; print color to current pixel loc
+    loop ds_col
+    add di,312      ; increment di
+    pop cx
+    loop ds_row     ; if row != 8, jump to ds_row
+    ret
+
 ; lfsr, sets ax, clobbers bx
 rng:
     mov ax,[rand]
@@ -216,59 +287,6 @@ rand_color:
     mov bx,colors-1
     cs xlat     ; al = [colors + al]
     mov ah,al
-    ret
-
-new_pill:
-    mov si,sprites+2*8
-    mov di,BOARD_START+3*8
-    call draw_sprite
-    mov di,BOARD_START+4*8
-    call draw_sprite
-    mov word [cur_pill_loc],BOARD_START+3*8
-    mov word [pill_offset],8
-    ret
-
-; draw_sprite gives the sprite a random color
-; di: top left pixel
-; si; start of sprite
-; clobbered: ax, bx, cx, di, si
-draw_sprite:
-    call rand_color
-    mov cx,8
-ds_row:
-    push cx
-    mov cx,8
-    cs lodsb        ; load the whole byte of the sprite into al, advance si
-    mov bl,al       ; save it in dl
-ds_col:
-    mov al,BLACK
-    shl bl,1
-    jnc ds_print    ; if we just shifted off a 0, print black pixel
-    mov al,ah       ; otherwise get the color
-ds_print:
-    stosb           ; print color to current pixel loc
-    loop ds_col
-    add di,312      ; increment di
-    pop cx
-    loop ds_row     ; if row != 8, jump to ds_row
-    ret
-
-draw_outline:
-    mov al,BORDER_COLOR
-    mov di,BOARD_START-320-1
-    mov cx,16*8+1
-do_virt_lines:
-    stosb
-    add di,8*8
-    stosb
-    add di,320-8*8-2
-    loop do_virt_lines
-    mov di,BOARD_START-320-1
-    mov cx,8*8+2
-    rep stosb
-    mov di,BOARD_START+16*8*320-1
-    mov cx,8*8+2
-    rep stosb
     ret
 
 sprites:
