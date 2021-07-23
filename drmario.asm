@@ -1,20 +1,37 @@
     bits 16
 
-base:           equ 0xfc80
-cur_pill_loc:   equ base                ; [word]
-pill_offset:    equ cur_pill_loc + 2    ; [word]
-next_tick:      equ pill_offset + 2     ; [word]
-rand:           equ next_tick + 2       ; [word]
-
-BLACK:          equ 0xFF
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; adjustable parameters ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
 PILL_RED:       equ 0x27
 PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
-BORDER_COLOR:   equ 0x6a
+BORDER_COLOR:   equ 0x6b
 SPEED:          equ 4
-VIRUS_COUNT:    equ 4
+VIRUS_COUNT:    equ 8
+NUM_ROWS:       equ 16  ; Original: 16
+NUM_COLS:       equ 8   ; Original: 8
 
-BOARD_START:    equ 5*8*320 + 16*8 ; start board at 16,5
+;;;;;;;;;;;;;;;;;;;;;;
+;; fixed parameters ;;
+;;;;;;;;;;;;;;;;;;;;;;
+SPRITE_SIZE:  equ 8
+BOARD_HEIGHT: equ SPRITE_SIZE*NUM_ROWS
+BOARD_WIDTH:  equ SPRITE_SIZE*NUM_COLS
+BOARD_START:  equ (100-BOARD_HEIGHT/2)*320+(160-BOARD_WIDTH/2)
+BOARD_END:    equ (100+BOARD_HEIGHT/2)*320+(160+BOARD_WIDTH/2)
+COMMON_PIXEL: equ 5
+
+;;;;;;;;;;;;;;;;;;;;
+;; game variables ;;
+;;;;;;;;;;;;;;;;;;;;
+base:           equ 0xfc80
+pill_loc:       equ base                ; [word]
+pill_color:     equ pill_loc + 2        ; [word]
+pill_offset:    equ pill_color + 2      ; [word]
+pill_sprite:    equ pill_offset + 2     ; [word]
+next_tick:      equ pill_sprite + 2     ; [word]
+rand:           equ next_tick + 2       ; [word]
 
 start:
     mov ax,0x0013   ; set video mode vga 320x200x256
@@ -29,64 +46,62 @@ start:
     mov [rand],dx ; initialize rand
 
     ;;;;;;;;;;;;;;;;;
+    ;; draw border ;;
+    ;;;;;;;;;;;;;;;;;
+    ; draw colored part
+    mov al,BORDER_COLOR
+    mov cx,320*200
+    xor di,di
+    rep stosb 
+    ; draw black part
+    xor al,al
+    mov bx,BOARD_HEIGHT
+    mov di,BOARD_START
+db_row:
+    mov cx,BOARD_WIDTH
+    rep stosb
+    add di,320-BOARD_WIDTH
+    dec bx
+    jnz db_row
+
+    ;;;;;;;;;;;;;;;;;
     ;; place virii ;;
     ;;;;;;;;;;;;;;;;;
-    mov dx,0 ; bx: virus count
-    mov di,BOARD_START+15*8*320+7*8 ; start at bottom right
+    mov dx,VIRUS_COUNT
+    ; start at bottom right sprite and work back
+    mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
+    mov si,sprites+7*SPRITE_SIZE ; draw virus sprite
 pv_row:
-    mov cx,8
+    mov cx,NUM_COLS
 pv_loop:
     call rng
     cmp al,210
     jb pv_continue
-    push cx
-    push di
-    mov si,sprites+6*8
-    call draw_sprite_rand_color
-    pop di
-    pop cx
-    inc dx; increment virus count
+    call rand_color
+    call draw_sprite
+    dec dx ; decrement virus count
+    jz pv_done
 pv_continue:
-    cmp dx,VIRUS_COUNT
-    je pv_done
-    sub di,8
-    ; if cx is 0, then subtract row
+    sub di,SPRITE_SIZE
     loop pv_loop
-    sub di,8*320-8*8
+    ; if cx is 0, then subtract row
+    sub di,SPRITE_SIZE*320-BOARD_WIDTH
     cmp di,BOARD_START
     ja pv_row
 pv_done:
-
-    ;;;;;;;;;;;;;;;;;;
-    ;; draw outline ;;
-    ;;;;;;;;;;;;;;;;;;
-    mov al,BORDER_COLOR
-    mov di,BOARD_START-320-1
-    mov cx,16*8+1
-do_virt_lines:
-    stosb
-    add di,8*8
-    stosb
-    add di,320-8*8-2
-    loop do_virt_lines
-    mov di,BOARD_START-320-1
-    mov cx,8*8+2
-    rep stosb
-    mov di,BOARD_START+16*8*320-1
-    mov cx,8*8+2
-    rep stosb
-
-    ;;;;;;;;;;;;;;;;;;
-    ;; make a pill! ;;
-    ;;;;;;;;;;;;;;;;;;
+    
+    ;;;;;;;;;;;;;;;;;;;;;
+    ;; make a new pill ;;
+    ;;;;;;;;;;;;;;;;;;;;;
     call pillnew
 
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; initialization done, game loop follows ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 game_loop:
-    ;;;;;;;;;;;;;;;;
-    ;; user input ;;
-    ;;;;;;;;;;;;;;;;
-
-    ; precompute first offset for R and second offset for LR
+    ;;;;;;;;;;;;;;;;;;;;
+    ;; get user input ;;
+    ;;;;;;;;;;;;;;;;;;;;
     mov bx,8        
     mov cx,[pill_offset]
     test cx,cx ; is pill offset negative? pill veritcal?
@@ -94,7 +109,6 @@ game_loop:
     shl bx,1        ; R horizontal, mul bx by 2
     xor cx,cx       ; LR/horiz: only check 1 place
 gl_offset_ok:
-
     mov ah,0x01 ; bios key available
     int 0x16
     mov ah,0x00
@@ -116,36 +130,49 @@ gl_check_down:
     jne gl_check_a
     call pillfall 
 gl_check_a:
+    ; swap pill orientation
     cmp ah,0x1e ; 'a'
-    jne gl_clock
+    jne gl_check_s
     call pillrot
-    ; cmp ah,0x1f ; 's'
+gl_check_s:
+    cmp ah,0x1f ; 's'
+    jne gl_clock
+    ; swap colors
+    mov ax,[pill_color]
+    xchg al,ah
+    mov [pill_color],ax
+    call pilldraw
 
-gl_clock:
     ;;;;;;;;;;;;;;;;
     ;; game clock ;;
     ;;;;;;;;;;;;;;;;
+gl_clock:
     mov ah,0x00
     int 0x1a    ; bios clock read
     cmp dx,[next_tick]
     jb game_loop
     add dx,SPEED
     mov [next_tick],dx
-
+    ;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; make the pill fall ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;
     call pillfall
     jmp game_loop
     ;;;;;;;;;;;;;
     ;; the end ;;
     ;;;;;;;;;;;;;
 
+
 pillnew:
-    mov si,sprites+2*8
-    mov di,BOARD_START+3*8
-    call draw_sprite_rand_color
-    mov di,BOARD_START+4*8
-    call draw_sprite_rand_color
-    mov word [cur_pill_loc],BOARD_START+3*8
+    mov word [pill_loc],BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
     mov word [pill_offset],8
+    mov word [pill_sprite],sprites+3*8
+    call rand_color
+    mov cl,al
+    call rand_color
+    mov ah,cl
+    mov [pill_color],ax
+    call pilldraw
     ret
 
 pillfall:
@@ -157,95 +184,70 @@ pillfall:
     xor cx,cx   ; when falling with vertical pill
 pf_call:
     call pillmove 
-    jz pf_done    ; pillmove sets ZF when it is successful
-    call pillnew  ; not successful, make a new pill
-pf_done:
+    jz pf_return ; pillmove sets ZF when it is successful
+    jmp pillnew  ; not successful, make a new pill
+pf_return:
     ret
 
 pillrot:
-    mov ax,[pill_offset]
-    mov bx,8
-    test ax,ax          ; if we are rotated
-    js pr_test
-    mov bx,-8*320       ; set the other to above
+    mov bx,-8*320              ; new offset is vert
+    mov cx,sprites+SPRITE_SIZE ; new sprites are vert
+    cmp word [pill_offset],0   ; are we currently horiz?
+    jg pr_test
+    mov bx,8                   ; set offset to horiz
+    add cx,2*SPRITE_SIZE       ; set sprites to horiz
 pr_test:
-    xchg ax,bx          ; exchange from/to
-    mov si,[cur_pill_loc] 
-    mov di,si
-    add di,ax
-    add si,bx
-    call occ            ; is "to" occupied?
-    jz pr_ok
-    ret
+    mov di,[pill_loc] 
+    test byte [di+COMMON_PIXEL+bx],0xFF
+    jnz pf_return              ; reuse pillfall's ret 
 pr_ok:
-    mov [pill_offset],ax ; actually change offset
-    jmp move_sprite     ; move the sprite
+    call pillclear
+    mov [pill_offset],bx ; actually change offset
+    mov [pill_sprite],cx ; actually change sprite
+    jmp pilldraw
 
 ; ax: moving offset
 ; bx: checking offset 1
 ; cx: checking offset 2 (in addition to bx)
 pillmove:
-    mov dx,[cur_pill_loc]
-    mov di,dx
-    add di,bx ; add in the testing offset 1
+    mov di,[pill_loc]
 pm_test:
-    call occ
+    test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done
-    add di,cx
-    call occ
+    add bx,cx
+    test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done
 pm_move:
-    pushf
-    xor di,di
-    mov si,dx
-    call move_sprite        ; save left part
-    mov si,dx               ; move right/up part of pill
-    add si,[pill_offset]
-    mov di,si
-    add di,ax
-    call move_sprite
-    xor si,si               ; restore left part
-    mov di,dx
-    add di,ax
-    call move_sprite
-    add word [cur_pill_loc],ax
-    popf
+    call pillclear
+    add word [pill_loc],ax
+    call pilldraw
+    xor ax,ax ; resets ZF=1 for pillfall
 pm_done:
     ret
 
-; occupied(di) ZF=0 if occupied
-occ:
-    test byte [di],0xFF ; top left corner
-    jnz occ_done
-    test byte [di+7*320+7],0xFF ; bottom right corner
-occ_done:
-    ret
+pillclear:
+    mov di,[pill_loc]
+    mov si,sprites
+    call draw_sprite
+    add di,[pill_offset]
+    jmp draw_sprite
 
-; si: source
-; di: target
-; clobbers cx, si, di
-move_sprite:
-    mov cx,8
-csd_outer_loop:
-    push cx
-    mov cx,8
-csd_inner_loop:
-    movsb ; [di++] = [si++]
-    mov byte [si-1],0
-    loop csd_inner_loop
-    add si,312
-    add di,312
-    pop cx
-    loop csd_outer_loop
-    ret
+pilldraw:
+    mov ax,[pill_color]
+    mov di,[pill_loc]
+    mov si,[pill_sprite]
+    call draw_sprite
+    mov al,ah
+    add di,[pill_offset]
+    add si,SPRITE_SIZE
+    jmp draw_sprite
 
-draw_sprite_rand_color:
-    call rand_color
-; draw_sprite gives the sprite a random color
 ; di: top left pixel
-; si; start of sprite
-; clobbered: ax, bx, cx, di, si
+; si: start of sprite
+; al: color
 draw_sprite:
+    pusha
+    mov ah,al
     mov cx,8
 ds_row:
     push cx
@@ -253,7 +255,7 @@ ds_row:
     cs lodsb        ; load the whole byte of the sprite into al, advance si
     mov bl,al       ; save it in dl
 ds_col:
-    mov al,BLACK
+    xor al,al
     shl bl,1
     jnc ds_print    ; if we just shifted off a 0, print black pixel
     mov al,ah       ; otherwise get the color
@@ -263,6 +265,7 @@ ds_print:
     add di,312      ; increment di
     pop cx
     loop ds_row     ; if row != 8, jump to ds_row
+    popa
     ret
 
 ; lfsr, sets ax, clobbers bx
@@ -286,19 +289,11 @@ rand_color:
     jz rand_color
     mov bx,colors-1
     cs xlat     ; al = [colors + al]
-    mov ah,al
     ret
 
 sprites:
-    ; 0: pill top
-    db 0b01111100 
-    db 0b11011110
-    db 0b10111110
-    db 0b10111110
-    db 0b10111110
-    db 0b10111110
-    db 0b11111110
-    db 0b00000000
+    ; 0: clear
+    dw 0x00,0x00,0x00,0x00
     ; 1: pill bottom
     db 0b10111110
     db 0b10111110
@@ -308,7 +303,16 @@ sprites:
     db 0b11111110
     db 0b01111100
     db 0b00000000
-    ; 2: pill left
+    ; 2: pill top
+    db 0b01111100 
+    db 0b11011110
+    db 0b10111110
+    db 0b10111110
+    db 0b10111110
+    db 0b10111110
+    db 0b11111110
+    db 0b00000000
+    ; 3: pill left
     db 0b01111110 
     db 0b11000010
     db 0b10111110
@@ -317,7 +321,7 @@ sprites:
     db 0b11111110
     db 0b01111110
     db 0b00000000
-    ; 3: pill right
+    ; 4: pill right
     db 0b11111100 
     db 0b00000110
     db 0b11111110
@@ -326,7 +330,7 @@ sprites:
     db 0b11111110
     db 0b11111100
     db 0b00000000
-    ; 4: pill single
+    ; 5: pill single
     db 0b01111100 
     db 0b11011110
     db 0b10111110
@@ -335,7 +339,7 @@ sprites:
     db 0b11111110
     db 0b01111100
     db 0b00000000
-    ; 5: pill clear
+    ; 6: pill clear
     db 0b01111100 
     db 0b10000010
     db 0b10000010
@@ -344,7 +348,7 @@ sprites:
     db 0b10000010
     db 0b01111100
     db 0b00000000
-    ; 6: virus
+    ; 7: virus
     db 0b11000110
     db 0b00111000
     db 0b00010000
