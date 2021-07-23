@@ -1,3 +1,5 @@
+; from Boot Sector Games
+
     bits 16
 
 v_a:    equ 0xfa00
@@ -41,10 +43,6 @@ m1:
     dec word [v_a]
     jns m0
 
-
-
-
-
     mov ah,0x00
     int 0x16
 
@@ -53,5 +51,5 @@ m1:
 
     int 0x20
 
-    
-%include "end.asm"
+times 510 - ($ - $$) db 0
+dw 0xaa55

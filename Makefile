@@ -1,31 +1,13 @@
-ifeq (run, $(firstword $(MAKECMDGOALS)))
-  RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-  $(eval $(RUN_ARGS):;@:)
-endif
-
-ifeq (drun, $(firstword $(MAKECMDGOALS)))
-  DRUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-  $(eval $(DRUN_ARGS):;@:)
-endif
-
-ifeq (gdb, $(firstword $(MAKECMDGOALS)))
-  GDB_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-  $(eval $(GDB_ARGS):;@:)
-endif
-
-ifeq (size, $(firstword $(MAKECMDGOALS)))
-  SIZE_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-  $(eval $(SIZE_ARGS):;@:)
-endif
-
-run: $(patsubst %,%.img,$(RUN_ARGS))
-	# qemu-system-i386 -s -S -hda $^
+run: drmario.img
 	qemu-system-i386 -hda $^
 
-drun: $(patsubst %,%.img,$(DRUN_ARGS))
+palette: palette.img
+	qemu-system-i386 -hda $^
+
+debug: drmario.img
 	qemu-system-i386 -s -S -hda $^
 
-gdb: $(patsubst %,%.elf,$(GDB_ARGS))
+gdb: drmario.elf
 	gdb $< \
 			-ex 'target remote localhost:1234' \
 			-ex 'set architecture i8086' \
@@ -33,8 +15,8 @@ gdb: $(patsubst %,%.elf,$(GDB_ARGS))
 			-ex 'break start' \
 			-ex 'continue'
 
-size: $(SIZE_ARGS)
-	@perl -nE 'print unless /times 510|dw 0xaa55/' $^.asm > tmp.asm
+size: drmario.asm
+	@perl -nE 'print unless /times 510|dw 0xaa55/' $^ > tmp.asm
 	@nasm -f elf32 -g3 -F dwarf tmp.asm -o tmp.o
 	@ld.lld -Ttext=0x7c00 -melf_i386 tmp.o -o tmp.elf 2>/dev/null
 	@llvm-objcopy -O binary tmp.elf tmp.img
