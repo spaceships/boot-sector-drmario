@@ -102,6 +102,7 @@ game_loop:
     ;;;;;;;;;;;;;;;;;;;;
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
+    ; preamble, setting up movement
     mov bx,8        
     mov cx,[pill_offset]
     test cx,cx ; is pill offset negative? pill veritcal?
@@ -109,31 +110,36 @@ game_loop:
     shl bx,1        ; R horizontal, mul bx by 2
     xor cx,cx       ; LR/horiz: only check 1 place
 gl_offset_ok:
+
     mov ah,0x01 ; bios key available
     int 0x16
     mov ah,0x00
     je gl_check_left
     int 0x16
+
 gl_check_left:
     cmp ah,0x4b ; left arrow
     jne gl_check_right
     mov ax,-8
     mov bx,ax
     call pillmove
+
 gl_check_right:
     cmp ah,0x4d ; right arrow
     jne gl_check_down
     mov ax,8
     call pillmove
+
 gl_check_down:
     cmp ah,0x50 ; down arrow
     jne gl_check_a
     call pillfall 
+
 gl_check_a:
-    ; swap pill orientation
     cmp ah,0x1e ; 'a'
     jne gl_check_s
     call pillrot
+
 gl_check_s:
     cmp ah,0x1f ; 's'
     jne gl_clock
@@ -162,7 +168,6 @@ gl_clock:
     ;; the end ;;
     ;;;;;;;;;;;;;
 
-
 pillnew:
     mov word [pill_loc],BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
     mov word [pill_offset],8
@@ -175,6 +180,23 @@ pillnew:
     call pilldraw
     ret
 
+pillrot:
+    mov bx,-8*320              ; new offset is vert
+    mov cx,sprites+SPRITE_SIZE ; new sprites are vert
+    cmp word [pill_offset],0   ; are we currently horiz?
+    jg gl_rotate_test
+    mov bx,8                   ; set offset to horiz
+    add cx,2*SPRITE_SIZE       ; set sprites to horiz
+gl_rotate_test:
+    mov di,[pill_loc] 
+    test byte [di+COMMON_PIXEL+bx],0xFF
+    jnz pm_done                ; no rotate, return
+gl_rotate_ok:
+    call pillclear
+    mov [pill_offset],bx ; actually change offset
+    mov [pill_sprite],cx ; actually change sprite
+    jmp pilldraw
+
 pillfall:
     mov ax,8*320
     mov bx,ax
@@ -183,28 +205,39 @@ pillfall:
     jns pf_call ; because we only have to test 1 loc
     xor cx,cx   ; when falling with vertical pill
 pf_call:
-    call pillmove 
-    jz pf_return ; pillmove sets ZF when it is successful
-    jmp pillnew  ; not successful, make a new pill
-pf_return:
-    ret
+    call pillmove ; pillmove sets ZF when it is successful
+    jz pm_done    ; reuse pillmove's ret statement 
+    ; there is something in the way, check for clears
 
-pillrot:
-    mov bx,-8*320              ; new offset is vert
-    mov cx,sprites+SPRITE_SIZE ; new sprites are vert
-    cmp word [pill_offset],0   ; are we currently horiz?
-    jg pr_test
-    mov bx,8                   ; set offset to horiz
-    add cx,2*SPRITE_SIZE       ; set sprites to horiz
-pr_test:
-    mov di,[pill_loc] 
-    test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz pf_return              ; reuse pillfall's ret 
-pr_ok:
-    call pillclear
-    mov [pill_offset],bx ; actually change offset
-    mov [pill_sprite],cx ; actually change sprite
-    jmp pilldraw
+;     mov cx,4
+;     mov di,[pill_loc]
+; pf_checkrow:
+;     call clearrow
+;     sub di,SPRITE_SIZE
+;     loop pf_checkrow
+
+pf_done: 
+    jmp pillnew
+
+; clearrow:
+;     mov dl,[di+COMMON_PIXEL]
+;     mov al,dl 
+;     and al,[di+SPRITE_SIZE+COMMON_PIXEL]
+;     and al,[di+2*SPRITE_SIZE+COMMON_PIXEL]
+;     and al,[di+3*SPRITE_SIZE+COMMON_PIXEL]
+;     cmp dl,al
+;     jne pm_done
+;     ; clear!
+;     mov si,sprites ; zero sprite
+;     mov cx,4
+; cr_clear:
+;     call draw_sprite
+;     add di,SPRITE_SIZE
+;     loop cr_clear
+;     ret
+
+; clearcol:
+;     ret 
 
 ; ax: moving offset
 ; bx: checking offset 1
@@ -229,17 +262,17 @@ pillclear:
     mov di,[pill_loc]
     mov si,sprites
     call draw_sprite
-    add di,[pill_offset]
-    jmp draw_sprite
+    jmp pd_draw_sprite ; reuse the bottom 2 lines of pilldraw
 
 pilldraw:
-    mov ax,[pill_color]
     mov di,[pill_loc]
+    mov ax,[pill_color]
     mov si,[pill_sprite]
     call draw_sprite
     mov al,ah
-    add di,[pill_offset]
     add si,SPRITE_SIZE
+pd_draw_sprite:
+    add di,[pill_offset]
     jmp draw_sprite
 
 ; di: top left pixel
@@ -252,19 +285,19 @@ draw_sprite:
 ds_row:
     push cx
     mov cx,8
-    cs lodsb        ; load the whole byte of the sprite into al, advance si
-    mov bl,al       ; save it in dl
+    cs lodsb  ; load byte of the sprite into al, advance si
+    mov bl,al ; save it in bl
 ds_col:
     xor al,al
     shl bl,1
-    jnc ds_print    ; if we just shifted off a 0, print black pixel
-    mov al,ah       ; otherwise get the color
+    jnc ds_print ; if we just shifted off a 0, print black pixel
+    mov al,ah    ; otherwise get the color
 ds_print:
-    stosb           ; print color to current pixel loc
+    stosb        ; print color to current pixel loc
     loop ds_col
-    add di,312      ; increment di
+    add di,312   ; increment di
     pop cx
-    loop ds_row     ; if row != 8, jump to ds_row
+    loop ds_row  ; if row != 8, jump to ds_row
     popa
     ret
 
