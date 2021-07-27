@@ -26,7 +26,7 @@ COMMON_PIXEL: equ 5
 ;; game variables ;;
 ;;;;;;;;;;;;;;;;;;;;
 base:           equ 0xfc80
-pill_loc:       equ base                ; [word]
+pill_loc:       equ 0                   ; [word]
 pill_color:     equ pill_loc + 2        ; [word]
 pill_offset:    equ pill_color + 2      ; [word]
 pill_sprite:    equ pill_offset + 2     ; [word]
@@ -34,6 +34,7 @@ next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 
 start:
+    mov bp,base     ; set base address for global state
     mov ax,0x0013   ; set video mode vga 320x200x256
     int 0x10        ; call bios interrupt
 
@@ -43,7 +44,7 @@ start:
 
     mov ah,0x00
     int 0x1a      ; bios clock read
-    mov [rand],dx ; initialize rand
+    mov [bp+rand],dx ; initialize rand
 
     ;;;;;;;;;;;;;;;;;
     ;; draw border ;;
@@ -104,8 +105,8 @@ game_loop:
     ;;;;;;;;;;;;;;;;;;;;
     ; preamble, setting up movement
     mov bx,8        
-    mov cx,[pill_offset]
-    test cx,cx ; is pill offset negative? pill veritcal?
+    mov cx,[bp+pill_offset]
+    test cx,cx ; is pill offset negative? pill vertical?
     js gl_offset_ok
     shl bx,1        ; R horizontal, mul bx by 2
     xor cx,cx       ; LR/horiz: only check 1 place
@@ -144,9 +145,9 @@ gl_check_s:
     cmp ah,0x1f ; 's'
     jne gl_clock
     ; swap colors
-    mov ax,[pill_color]
+    mov ax,[bp+pill_color]
     xchg al,ah
-    mov [pill_color],ax
+    mov [bp+pill_color],ax
     call pilldraw
 
     ;;;;;;;;;;;;;;;;
@@ -155,10 +156,10 @@ gl_check_s:
 gl_clock:
     mov ah,0x00
     int 0x1a    ; bios clock read
-    cmp dx,[next_tick]
+    cmp dx,[bp+next_tick]
     jb game_loop
     add dx,SPEED
-    mov [next_tick],dx
+    mov [bp+next_tick],dx
     ;;;;;;;;;;;;;;;;;;;;;;;;
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -169,37 +170,37 @@ gl_clock:
     ;;;;;;;;;;;;;
 
 pillnew:
-    mov word [pill_loc],BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
-    mov word [pill_offset],8
-    mov word [pill_sprite],sprites+3*8
+    mov word [bp+pill_loc],BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
+    mov word [bp+pill_offset],8
+    mov word [bp+pill_sprite],sprites+3*8
     call rng
     mov cl,al
     call rng
     mov ah,cl
-    mov [pill_color],ax
+    mov [bp+pill_color],ax
     jmp pilldraw
 
 pillrot:
     mov bx,-8*320              ; new offset is vert
     mov cx,sprites+SPRITE_SIZE ; new sprites are vert
-    cmp word [pill_offset],0   ; are we currently horiz?
+    cmp word [bp+pill_offset],0   ; are we currently horiz?
     jg gl_rotate_test
     mov bx,8                   ; set offset to horiz
     add cx,2*SPRITE_SIZE       ; set sprites to horiz
 gl_rotate_test:
-    mov di,[pill_loc] 
+    mov di,[bp+pill_loc]
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done                ; no rotate, return
 gl_rotate_ok:
     call pillclear
-    mov [pill_offset],bx ; actually change offset
-    mov [pill_sprite],cx ; actually change sprite
+    mov [bp+pill_offset],bx ; actually change offset
+    mov [bp+pill_sprite],cx ; actually change sprite
     jmp pilldraw
 
 pillfall:
     mov ax,8*320
     mov bx,ax
-    mov cx,[pill_offset] ; cx will be 8 or -8*320
+    mov cx,[bp+pill_offset] ; cx will be 8 or -8*320
     test cx,cx  ; if cx is negative, cancel it out
     jns pf_call ; because we only have to test 1 loc
     xor cx,cx   ; when falling with vertical pill
@@ -209,7 +210,7 @@ pf_call:
     ; there is something in the way, check for clears
 
 ;     mov cx,4
-;     mov di,[pill_loc]
+;     mov di,[bp+pill_loc]
 ; pf_checkrow:
 ;     call clearrow
 ;     sub di,SPRITE_SIZE
@@ -242,7 +243,7 @@ pf_done:
 ; bx: checking offset 1
 ; cx: checking offset 2 (in addition to bx)
 pillmove:
-    mov di,[pill_loc]
+    mov di,[bp+pill_loc]
 pm_test:
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done
@@ -251,27 +252,27 @@ pm_test:
     jnz pm_done
 pm_move:
     call pillclear
-    add word [pill_loc],ax
+    add word [bp+pill_loc],ax
     call pilldraw
     xor ax,ax ; resets ZF=1 for pillfall
 pm_done:
     ret
 
 pillclear:
-    mov di,[pill_loc]
+    mov di,[bp+pill_loc]
     mov si,sprites
     call draw_sprite
     jmp pd_draw_sprite ; reuse the bottom 2 lines of pilldraw
 
 pilldraw:
-    mov di,[pill_loc]
-    mov ax,[pill_color]
-    mov si,[pill_sprite]
+    mov di,[bp+pill_loc]
+    mov ax,[bp+pill_color]
+    mov si,[bp+pill_sprite]
     call draw_sprite
     mov al,ah
     add si,SPRITE_SIZE
 pd_draw_sprite:
-    add di,[pill_offset]
+    add di,[bp+pill_offset]
     jmp draw_sprite
 
 ; di: top left pixel
@@ -303,12 +304,12 @@ ds_print:
 ; put a random color from colors array into al
 ; put a random byte into ah
 rng:
-    mov ax,[rand]
+    mov ax,[bp+rand]
     mov bx,ax
     xor bl,bh
     rcr bl,2      ; put bit 1 into carry flag
     rcr ax,1
-    mov [rand],ax ; save new seed
+    mov [bp+rand],ax ; save new seed
     and al,3      ; mask off bottom 2 bits of al
     jz rng        ; make sure at least one bit is set
     mov bx,colors-1
