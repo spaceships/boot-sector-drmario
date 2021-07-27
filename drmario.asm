@@ -177,8 +177,7 @@ pillnew:
     call rng
     mov ah,cl
     mov [pill_color],ax
-    call pilldraw
-    ret
+    jmp pilldraw
 
 pillrot:
     mov bx,-8*320              ; new offset is vert
