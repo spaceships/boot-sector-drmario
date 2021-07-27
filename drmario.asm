@@ -301,16 +301,25 @@ ds_print:
     popa
     ret
 
-; lfsr, sets ax, clobbers bx
+; ; lfsr, sets ax, clobbers bx
+; rng:
+;     mov ax,[rand]
+;     mov bx,ax
+;     and bx,0b1000000000101101
+;     shr ax,1
+;     xor bl,bh
+;     jpe rng_done
+;     or ax,0x8000
+; rng_done:
+;     mov [rand],ax
+;     ret
+
 rng:
     mov ax,[rand]
     mov bx,ax
-    and bx,0b1000000000101101
-    shr ax,1
     xor bl,bh
-    jpe rng_done
-    or ax,0x8000
-rng_done:
+    rcr bl,2      ; put bit 1 into carry flag
+    rcr ax,1
     mov [rand],ax
     ret
 
