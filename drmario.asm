@@ -75,9 +75,9 @@ pv_row:
     mov cx,NUM_COLS
 pv_loop:
     call rng
-    cmp al,210
+    cmp ah,210
     jb pv_continue
-    call rand_color
+    call rng
     call draw_sprite
     dec dx ; decrement virus count
     jz pv_done
@@ -172,9 +172,9 @@ pillnew:
     mov word [pill_loc],BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
     mov word [pill_offset],8
     mov word [pill_sprite],sprites+3*8
-    call rand_color
+    call rng
     mov cl,al
-    call rand_color
+    call rng
     mov ah,cl
     mov [pill_color],ax
     call pilldraw
@@ -301,34 +301,17 @@ ds_print:
     popa
     ret
 
-; ; lfsr, sets ax, clobbers bx
-; rng:
-;     mov ax,[rand]
-;     mov bx,ax
-;     and bx,0b1000000000101101
-;     shr ax,1
-;     xor bl,bh
-;     jpe rng_done
-;     or ax,0x8000
-; rng_done:
-;     mov [rand],ax
-;     ret
-
+; put a random color from colors array into al
+; put a random byte into ah
 rng:
     mov ax,[rand]
     mov bx,ax
     xor bl,bh
     rcr bl,2      ; put bit 1 into carry flag
     rcr ax,1
-    mov [rand],ax
-    ret
-
-; put a random color from colors array into ah
-; mangles ax,bx,dx
-rand_color:
-    call rng
-    and al,3
-    jz rand_color
+    mov [rand],ax ; save new seed
+    and al,3      ; mask off bottom 2 bits of al
+    jz rng        ; make sure at least one bit is set
     mov bx,colors-1
     cs xlat     ; al = [colors + al]
     ret
