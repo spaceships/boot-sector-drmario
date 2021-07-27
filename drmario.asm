@@ -116,33 +116,34 @@ gl_offset_ok:
     int 0x16
     mov ah,0x00
     je gl_check_left
-    int 0x16
+    int 0x16    ; ah = key scan code
+    mov al,ah
 
 gl_check_left:
-    cmp ah,0x4b ; left arrow
+    cmp al,0x4b ; left arrow
     jne gl_check_right
     mov ax,-8
     mov bx,ax
     call pillmove
 
 gl_check_right:
-    cmp ah,0x4d ; right arrow
+    cmp al,0x4d ; right arrow
     jne gl_check_down
     mov ax,8
     call pillmove
 
 gl_check_down:
-    cmp ah,0x50 ; down arrow
+    cmp al,0x50 ; down arrow
     jne gl_check_a
     call pillfall 
 
 gl_check_a:
-    cmp ah,0x1e ; 'a'
+    cmp al,0x1e ; 'a'
     jne gl_check_s
     call pillrot
 
 gl_check_s:
-    cmp ah,0x1f ; 's'
+    cmp al,0x1f ; 's'
     jne gl_clock
     ; swap colors
     mov ax,[bp+pill_color]
