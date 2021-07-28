@@ -185,14 +185,13 @@ pillrot:
     mov bx,-8*320              ; new offset is vert
     mov cx,sprites+SPRITE_SIZE ; new sprites are vert
     cmp word [bp+pill_offset],0   ; are we currently horiz?
-    jg gl_rotate_test
+    jg pr_rotate_test
     mov bx,8                   ; set offset to horiz
     add cx,2*SPRITE_SIZE       ; set sprites to horiz
-gl_rotate_test:
+pr_rotate_test:
     mov di,[bp+pill_loc]
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done                ; no rotate, return
-gl_rotate_ok:
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
     mov [bp+pill_sprite],cx ; actually change sprite
@@ -209,36 +208,48 @@ pf_call:
     call pillmove ; pillmove sets ZF when it is successful
     jz pm_done    ; reuse pillmove's ret statement 
     ; there is something in the way, check for clears
-
-;     mov cx,4
-;     mov di,[bp+pill_loc]
-; pf_checkrow:
-;     call clearrow
-;     sub di,SPRITE_SIZE
-;     loop pf_checkrow
-
+    ; mov bx,SPRITE_SIZE
+    ; call check_and_clear ; check and clear row
+    ; mov bx,SPRITE_SIZE*320
+    ; call check_and_clear ; check and clear col
 pf_done: 
     jmp pillnew
 
-; clearrow:
-;     mov dl,[di+COMMON_PIXEL]
-;     mov al,dl 
-;     and al,[di+SPRITE_SIZE+COMMON_PIXEL]
-;     and al,[di+2*SPRITE_SIZE+COMMON_PIXEL]
-;     and al,[di+3*SPRITE_SIZE+COMMON_PIXEL]
-;     cmp dl,al
-;     jne pm_done
-;     ; clear!
-;     mov si,sprites ; zero sprite
-;     mov cx,4
-; cr_clear:
-;     call draw_sprite
-;     add di,SPRITE_SIZE
-;     loop cr_clear
-;     ret
+; ; checks and clear either all vertical or horizontal matches
+; ; bx: offset to use - either SPRITE_SIZE for row checking 
+; ;     or SPRITE_SIZE*320 for col checking
+; check_and_clear:
+;     mov di,[bp+pill_loc] 
+;     ; start at leftmost/topmost possible position
+;     sub di,bx
+;     sub di,bx
+;     sub di,bx
+;     mov cx,3
+; pf_checkrow:
+;     call check4
+;     add di,bx ; increment by 1 offset
+;     loop pf_checkrow
 
-; clearcol:
-;     ret 
+; ; checks and clears 4 locs if there are common colors starting at di, offset by bx
+; check4:
+;     pusha
+;     mov al,[di+COMMON_PIXEL] ; get first sprite color
+;     mov cx,3
+;     mov dx,bx ; save offset
+; c4_check:
+;     cmp al,[di+bx+COMMON_PIXEL] ; compare all 3 offsets by bx
+;     jne c4_done ; if not equal, return
+;     add bx,bx ; add in offset
+;     loop c4_check
+;     mov cx,4 ; clear all 4 sprites
+;     mov si,sprites ; zero sprite
+; c4_clear:
+;     call draw_sprite ; zero out sprite
+;     add di,dx ; add in offset
+;     loop c4_clear
+; c4_done:
+;     popa
+;     ret
 
 ; ax: moving offset
 ; bx: checking offset 1
