@@ -140,16 +140,14 @@ gl_check_down:
 gl_check_a:
     cmp al,0x1e ; 'a'
     jne gl_check_s
+    mov dx,8 ; swap colors when going horiz
     call pillrot
 
 gl_check_s:
     cmp al,0x1f ; 's'
     jne gl_clock
-    ; swap colors
-    mov ax,[bp+pill_color]
-    xchg al,ah
-    mov [bp+pill_color],ax
-    call pilldraw
+    mov dx,-8*320 ; swap colors when going virt
+    call pillrot
 
     ;;;;;;;;;;;;;;;;
     ;; game clock ;;
@@ -181,6 +179,7 @@ pillnew:
     mov [bp+pill_color],ax
     jmp pilldraw
 
+; dx: (new) offset to swap colors from
 pillrot:
     mov bx,8^(-8*320)
     xor bx,[bp+pill_offset]    ; toggle between +8 (horiz) and -8*320 (vert)
@@ -192,6 +191,14 @@ pillrot:
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
     mov [bp+pill_sprite],cx ; actually change sprite
+    cmp dx,bx 
+    jne pr_done
+pr_swap:
+    ; swap colors
+    mov ax,[bp+pill_color]
+    xchg al,ah
+    mov [bp+pill_color],ax
+pr_done:
     jmp pilldraw
 
 pillfall:
