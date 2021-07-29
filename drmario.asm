@@ -195,9 +195,7 @@ pillrot:
     jne pr_done
 pr_swap:
     ; swap colors
-    mov ax,[bp+pill_color]
-    xchg al,ah
-    mov [bp+pill_color],ax
+    ror word [bp+pill_color],8
 pr_done:
     jmp pilldraw
 
