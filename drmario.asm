@@ -71,7 +71,7 @@ db_row:
     mov dx,VIRUS_COUNT
     ; start at bottom right sprite and work back
     mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
-    mov si,sprites+7*SPRITE_SIZE ; draw virus sprite
+    mov si,sprite_virus ; draw virus sprite
 pv_row:
     mov cx,NUM_COLS
 pv_loop:
@@ -173,7 +173,7 @@ gl_clock:
 pillnew:
     mov word [bp+pill_loc],BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
     mov word [bp+pill_offset],8
-    mov word [bp+pill_sprite],sprites+3*8
+    mov word [bp+pill_sprite],sprite_left
     call rng
     mov cl,al
     call rng
@@ -183,7 +183,7 @@ pillnew:
 
 pillrot:
     mov bx,-8*320              ; new offset is vert
-    mov cx,sprites+SPRITE_SIZE ; new sprites are vert
+    mov cx,sprite_bottom       ; new sprites are vert
     cmp word [bp+pill_offset],0   ; are we currently horiz?
     jg pr_rotate_test
     mov bx,8                   ; set offset to horiz
@@ -242,7 +242,7 @@ pf_done:
 ;     add bx,bx ; add in offset
 ;     loop c4_check
 ;     mov cx,4 ; clear all 4 sprites
-;     mov si,sprites ; zero sprite
+;     mov si,sprite_none ; zero sprite
 ; c4_clear:
 ;     call draw_sprite ; zero out sprite
 ;     add di,dx ; add in offset
@@ -272,7 +272,7 @@ pm_done:
 
 pillclear:
     mov di,[bp+pill_loc]
-    mov si,sprites
+    mov si,sprite_none
     call draw_sprite
     jmp pd_draw_sprite ; reuse the bottom 2 lines of pilldraw
 
@@ -329,10 +329,9 @@ rng:
     cs xlat     ; al = [colors + al]
     ret
 
-sprites:
-    ; 0: clear
+sprite_none:
     dw 0x00,0x00,0x00,0x00
-    ; 1: pill bottom
+sprite_bottom:
     db 0b10111110
     db 0b10111110
     db 0b10111110
@@ -341,8 +340,8 @@ sprites:
     db 0b11111110
     db 0b01111100
     db 0b00000000
-    ; 2: pill top
-    db 0b01111100 
+sprite_top:
+    db 0b01111100
     db 0b11011110
     db 0b10111110
     db 0b10111110
@@ -350,8 +349,8 @@ sprites:
     db 0b10111110
     db 0b11111110
     db 0b00000000
-    ; 3: pill left
-    db 0b01111110 
+sprite_left:
+    db 0b01111110
     db 0b11000010
     db 0b10111110
     db 0b11111110
@@ -359,8 +358,8 @@ sprites:
     db 0b11111110
     db 0b01111110
     db 0b00000000
-    ; 4: pill right
-    db 0b11111100 
+sprite_right:
+    db 0b11111100
     db 0b00000110
     db 0b11111110
     db 0b11111110
@@ -368,8 +367,8 @@ sprites:
     db 0b11111110
     db 0b11111100
     db 0b00000000
-    ; 5: pill single
-    db 0b01111100 
+sprite_single:
+    db 0b01111100
     db 0b11011110
     db 0b10111110
     db 0b10111110
@@ -377,8 +376,8 @@ sprites:
     db 0b11111110
     db 0b01111100
     db 0b00000000
-    ; 6: pill clear
-    db 0b01111100 
+sprite_clear:
+    db 0b01111100
     db 0b10000010
     db 0b10000010
     db 0b10000010
@@ -386,7 +385,7 @@ sprites:
     db 0b10000010
     db 0b01111100
     db 0b00000000
-    ; 7: virus
+sprite_virus:
     db 0b11000110
     db 0b00111000
     db 0b00010000
