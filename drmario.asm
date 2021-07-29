@@ -285,7 +285,8 @@ pilldraw:
     add si,SPRITE_SIZE
 pd_draw_sprite:
     add di,[bp+pill_offset]
-    jmp draw_sprite
+    ; fall through to draw_sprite
+    ; jmp draw_sprite
 
 ; di: top left pixel
 ; si: start of sprite
