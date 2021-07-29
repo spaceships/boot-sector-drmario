@@ -330,8 +330,7 @@ ds_end:
     popa
     ret
 
-; put a random color from colors array into al
-; put a random byte into ah
+; put a random word into ax
 rng:
     mov ax,[bp+rand]
     mov bx,ax
@@ -341,6 +340,7 @@ rng:
     mov [bp+rand],ax ; save new seed
     ret
 
+; put a random color from colors array into al
 rand_color:
     call rng
     call rng
