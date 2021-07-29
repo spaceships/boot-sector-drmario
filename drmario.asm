@@ -182,13 +182,10 @@ pillnew:
     jmp pilldraw
 
 pillrot:
-    mov bx,-8*320              ; new offset is vert
-    mov cx,sprite_bottom       ; new sprites are vert
-    cmp word [bp+pill_offset],0   ; are we currently horiz?
-    jg pr_rotate_test
-    mov bx,8                   ; set offset to horiz
-    add cx,2*SPRITE_SIZE       ; set sprites to horiz
-pr_rotate_test:
+    mov bx,8^(-8*320)
+    xor bx,[bp+pill_offset]    ; toggle between +8 (horiz) and -8*320 (vert)
+    mov cx,((sprite_bottom-start)^(sprite_left-start))
+    xor cx,[bp+pill_sprite]    ; toggle between sprite_left and sprite_bottom
     mov di,[bp+pill_loc]
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done                ; no rotate, return
