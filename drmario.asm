@@ -138,13 +138,13 @@ gl_check_down:
     call pillfall 
 
 gl_check_a:
+    xor cl,cl ; swap colors when going horiz
     cmp al,0x1e ; 'a'
-    mov dx,8 ; swap colors when going horiz
     je pillrot
 
 gl_check_s:
+    mov cl,8 ; swap colors when going virt
     cmp al,0x1f ; 's'
-    mov dx,-8*320 ; swap colors when going virt
     je pillrot
 
     ;;;;;;;;;;;;;;;;
@@ -177,24 +177,20 @@ pillnew:
     mov [bp+pill_color],ax
     jmp pilldraw
 
-; dx: (new) offset to swap colors from
+; cl = 0 for rotate left, 8 for rotate right
 pillrot:
     mov bx,8^(-8*320)
     xor bx,[bp+pill_offset]    ; toggle between +8 (horiz) and -8*320 (vert)
-    mov cx,((sprite_bottom-start)^(sprite_left-start))
-    xor cx,[bp+pill_sprite]    ; toggle between sprite_left and sprite_bottom
+    mov dx,((sprite_bottom-start)^(sprite_left-start))
+    xor dx,[bp+pill_sprite]    ; toggle between sprite_left and sprite_bottom
     mov di,[bp+pill_loc]
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz gl_clock               ; no rotate, return
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
-    mov [bp+pill_sprite],cx ; actually change sprite
-    cmp dx,bx 
-    jne pr_done
-pr_swap:
-    ; swap colors
-    ror word [bp+pill_color],8
-pr_done:
+    mov [bp+pill_sprite],dx ; actually change sprite
+    xor cl,bl               ; set 8 or 0 depending on orientation
+    ror word [bp+pill_color],cl ; possibly swap colors
     call pilldraw
     jmp gl_clock
 
