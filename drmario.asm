@@ -16,6 +16,7 @@ NUM_COLS:       equ 8   ; Original: 8
 ;; fixed parameters ;;
 ;;;;;;;;;;;;;;;;;;;;;;
 SPRITE_SIZE:  equ 8
+SPRITE_ROWS:  equ 7
 BOARD_HEIGHT: equ SPRITE_SIZE*NUM_ROWS
 BOARD_WIDTH:  equ SPRITE_SIZE*NUM_COLS
 BOARD_START:  equ (100-BOARD_HEIGHT/2)*320+(160-BOARD_WIDTH/2)
@@ -279,7 +280,7 @@ pilldraw:
     mov si,[bp+pill_sprite]
     call draw_sprite
     mov al,ah
-    add si,SPRITE_SIZE
+    add si,SPRITE_ROWS
 pd_draw_sprite:
     add di,[bp+pill_offset]
     ; fall through to draw_sprite
@@ -291,7 +292,7 @@ pd_draw_sprite:
 draw_sprite:
     pusha
     mov ah,al
-    mov cx,8
+    mov cx,SPRITE_ROWS
 ds_row:
     push cx
     mov cx,8
@@ -307,7 +308,7 @@ ds_print:
     loop ds_col
     add di,312   ; increment di
     pop cx
-    loop ds_row  ; if row != 8, jump to ds_row
+    loop ds_row  ; if row != 7, jump to ds_row
     popa
     ret
 
@@ -326,8 +327,9 @@ rng:
     cs xlat     ; al = [colors + al]
     ret
 
+; all sprites consist of 7 rows of 8 pixels
 sprite_none:
-    dw 0x00,0x00,0x00,0x00
+    db 0,0,0,0,0,0,0
 sprite_bottom:
     db 0b10111110
     db 0b10111110
@@ -336,7 +338,6 @@ sprite_bottom:
     db 0b10111110
     db 0b11111110
     db 0b01111100
-    db 0b00000000
 sprite_top:
     db 0b01111100
     db 0b11011110
@@ -345,7 +346,6 @@ sprite_top:
     db 0b10111110
     db 0b10111110
     db 0b11111110
-    db 0b00000000
 sprite_left:
     db 0b01111110
     db 0b11000010
@@ -354,7 +354,6 @@ sprite_left:
     db 0b11111110
     db 0b11111110
     db 0b01111110
-    db 0b00000000
 sprite_right:
     db 0b11111100
     db 0b00000110
@@ -363,7 +362,6 @@ sprite_right:
     db 0b11111110
     db 0b11111110
     db 0b11111100
-    db 0b00000000
 sprite_single:
     db 0b01111100
     db 0b11011110
@@ -372,7 +370,6 @@ sprite_single:
     db 0b10111110
     db 0b11111110
     db 0b01111100
-    db 0b00000000
 sprite_clear:
     db 0b01111100
     db 0b10000010
@@ -381,7 +378,6 @@ sprite_clear:
     db 0b10000010
     db 0b10000010
     db 0b01111100
-    db 0b00000000
 sprite_virus:
     db 0b11000110
     db 0b00111000
@@ -390,7 +386,6 @@ sprite_virus:
     db 0b11111110
     db 0b10010010
     db 0b01111100
-    db 0b00000000
 
 colors:
     db PILL_YELLOW, PILL_RED, PILL_BLUE
