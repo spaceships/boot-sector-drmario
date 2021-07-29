@@ -168,7 +168,10 @@ gl_clock:
     ;;;;;;;;;;;;;
 
 pillnew:
-    mov word [bp+pill_loc],BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
+    mov bx, BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
+    test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
+    jnz start                        ; if occupied, restart game
+    mov word [bp+pill_loc],bx
     mov word [bp+pill_offset],8
     mov word [bp+pill_sprite],sprite_left
     call rng
@@ -261,21 +264,21 @@ pm_test:
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done
 pm_move:
+    push ax
     call pillclear 
+    pop ax
     add word [bp+pill_loc],ax
     call pilldraw
     xor ax,ax ; resets ZF=1 for pillfall
 pm_done:
     ret
 
-; clobbers si,di
+; clobbers ax,si,di
 pillclear:
-    push ax
     xor ax,ax
-    call pd_common
-    pop ax
-    ret
+    jmp pd_common
 
+; clobbers ax,si,di
 pilldraw:
     mov ax,[bp+pill_color]
 pd_common:
