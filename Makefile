@@ -15,8 +15,8 @@ gdb: drmario.elf
 			-ex 'break start' \
 			-ex 'continue'
 
-dis: drmario.o
-	objdump $^ --disassemble
+dis: drmario.img
+	ndisasm -b16 -o0x7c00 $^
 
 size: drmario.asm
 	@perl -nE 'print unless /times 510|dw 0xaa55/' $^ > tmp.asm
