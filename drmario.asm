@@ -78,7 +78,7 @@ pv_loop:
     call rng
     cmp ah,210
     jb pv_continue
-    call rng
+    call rand_color
     mov si,sprite_virus ; draw virus sprite
     call draw_sprite
     dec dx ; decrement virus count
@@ -174,9 +174,9 @@ pillnew:
     mov word [bp+pill_loc],bx
     mov word [bp+pill_offset],8
     mov word [bp+pill_sprite],sprite_left
-    call rng
+    call rand_color
     mov cl,al
-    call rng
+    call rand_color
     mov ah,cl
     mov [bp+pill_color],ax
     jmp pilldraw
@@ -339,8 +339,13 @@ rng:
     rcr bl,2      ; put bit 1 into carry flag
     rcr ax,1
     mov [bp+rand],ax ; save new seed
+    ret
+
+rand_color:
+    call rng
+    call rng
     and al,3      ; mask off bottom 2 bits of al
-    jz rng        ; make sure at least one bit is set
+    jz rand_color ; make sure at least one bit is set
     mov bx,colors-1
     cs xlat     ; al = [colors + al]
     ret
