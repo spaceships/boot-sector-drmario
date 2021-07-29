@@ -72,7 +72,6 @@ db_row:
     mov dx,VIRUS_COUNT
     ; start at bottom right sprite and work back
     mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
-    mov si,sprite_virus ; draw virus sprite
 pv_row:
     mov cx,NUM_COLS
 pv_loop:
@@ -80,6 +79,7 @@ pv_loop:
     cmp ah,210
     jb pv_continue
     call rng
+    mov si,sprite_virus ; draw virus sprite
     call draw_sprite
     dec dx ; decrement virus count
     jz pv_done
@@ -285,12 +285,11 @@ pd_common:
     mov di,[bp+pill_loc]
     mov si,[bp+pill_sprite]
     call draw_sprite
+    ; `draw_sprite` leaves `si` set to the start of the next sprite
     mov al,ah
-    add si,SPRITE_ROWS
 pd_draw_sprite:
     add di,[bp+pill_offset]
     ; fall through to draw_sprite
-    ; jmp draw_sprite
 
 ; di: top left pixel
 ; si: start of sprite
@@ -298,23 +297,36 @@ pd_draw_sprite:
 draw_sprite:
     pusha
     mov ah,al
-    mov cx,SPRITE_ROWS
+    mov dx,SPRITE_ROWS
 ds_row:
-    push cx
-    mov cx,8
     cs lodsb  ; load byte of the sprite into al, advance si
     mov bl,al ; save it in bl
+ds_row_again:
+    mov cx,7  ; ds_col row runs 7 times
+
 ds_col:
     xor al,al
-    shl bl,1
+    rol bl,1
     jnc ds_print ; if we just shifted off a 0, print black pixel
     mov al,ah    ; otherwise get the color
 ds_print:
     stosb        ; print color to current pixel loc
     loop ds_col
-    add di,312   ; increment di
-    pop cx
-    loop ds_row  ; if row != 7, jump to ds_row
+
+    add di,320-7   ; increment di: +1 row, -7 cols
+    ; The `ds_col` loop has run 7 times, rotating the original `bl` from
+    ; `0xXXXXXXXR` 7 places to produce `0xRXXXXXXX`.  Shifting by 1 more bit
+    ; copies R into the carry flag and sets `bl` to `0xXXXXXXX0`, so we'll draw
+    ; the same row (if R is set) but won't repeat again afterward.
+    shl bl,1
+    dec dx       ; decrement row counter, preserving the carry flag
+    jc ds_row_again
+    jnz ds_row
+ds_end:
+    ; Preserve the final `si`, leaving it set to the start of the next sprite.
+    ; `pilldraw` uses this to draw the second half of the two-part pill.
+    mov bp,sp
+    mov [bp+2],si
     popa
     ret
 
@@ -333,53 +345,46 @@ rng:
     cs xlat     ; al = [colors + al]
     ret
 
-; all sprites consist of 7 rows of 8 pixels
+; All sprites consist of 7 rows of 7 pixels.
+; The format of each row is 0xXXXXXXXR.  One X bit per column, indicating
+; whether to draw the current color (1) or black (0) for that column.  The
+; final R bit can be set to 1 to repeat the row twice.
 sprite_bottom:
-    db 0b10111110
-    db 0b10111110
-    db 0b10111110
-    db 0b10111110
+    db 0b10111111
+    db 0b10111111
     db 0b10111110
     db 0b11111110
     db 0b01111100
 sprite_top:
     db 0b01111100
     db 0b11011110
-    db 0b10111110
-    db 0b10111110
-    db 0b10111110
-    db 0b10111110
+    db 0b10111111
+    db 0b10111111
     db 0b11111110
 sprite_left:
     db 0b01111110
     db 0b11000010
     db 0b10111110
-    db 0b11111110
-    db 0b11111110
+    db 0b11111111
     db 0b11111110
     db 0b01111110
 sprite_right:
     db 0b11111100
     db 0b00000110
-    db 0b11111110
-    db 0b11111110
-    db 0b11111110
-    db 0b11111110
+    db 0b11111111
+    db 0b11111111
     db 0b11111100
 sprite_single:
     db 0b01111100
     db 0b11011110
-    db 0b10111110
-    db 0b10111110
+    db 0b10111111
     db 0b10111110
     db 0b11111110
     db 0b01111100
 sprite_clear:
     db 0b01111100
-    db 0b10000010
-    db 0b10000010
-    db 0b10000010
-    db 0b10000010
+    db 0b10000011
+    db 0b10000011
     db 0b10000010
     db 0b01111100
 sprite_virus:
