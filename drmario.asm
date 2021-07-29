@@ -261,18 +261,21 @@ pm_test:
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz pm_done
 pm_move:
-    call pillclear
+    push ax ; pillclear clobbers ax
+    call pillclear 
+    pop ax
     add word [bp+pill_loc],ax
     call pilldraw
     xor ax,ax ; resets ZF=1 for pillfall
 pm_done:
     ret
 
+; clobbers ax,di
 pillclear:
     mov di,[bp+pill_loc]
-    mov si,sprite_none
+    mov al,0 ; draw arbitrary black sprite, clearing it
     call draw_sprite
-    jmp pd_draw_sprite ; reuse the bottom 2 lines of pilldraw
+    jmp pd_draw_sprite ; reuse the bottom lines of pilldraw
 
 pilldraw:
     mov di,[bp+pill_loc]
@@ -328,8 +331,6 @@ rng:
     ret
 
 ; all sprites consist of 7 rows of 8 pixels
-sprite_none:
-    db 0,0,0,0,0,0,0
 sprite_bottom:
     db 0b10111110
     db 0b10111110
