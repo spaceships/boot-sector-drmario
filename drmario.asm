@@ -139,15 +139,13 @@ gl_check_down:
 
 gl_check_a:
     cmp al,0x1e ; 'a'
-    jne gl_check_s
     mov dx,8 ; swap colors when going horiz
-    call pillrot
+    je pillrot
 
 gl_check_s:
     cmp al,0x1f ; 's'
-    jne gl_clock
     mov dx,-8*320 ; swap colors when going virt
-    call pillrot
+    je pillrot
 
     ;;;;;;;;;;;;;;;;
     ;; game clock ;;
@@ -187,7 +185,7 @@ pillrot:
     xor cx,[bp+pill_sprite]    ; toggle between sprite_left and sprite_bottom
     mov di,[bp+pill_loc]
     test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz pm_done                ; no rotate, return
+    jnz gl_clock               ; no rotate, return
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
     mov [bp+pill_sprite],cx ; actually change sprite
@@ -197,7 +195,8 @@ pr_swap:
     ; swap colors
     ror word [bp+pill_color],8
 pr_done:
-    jmp pilldraw
+    call pilldraw
+    jmp gl_clock
 
 pillfall:
     mov ax,8*320
