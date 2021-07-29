@@ -15,6 +15,9 @@ gdb: drmario.elf
 			-ex 'break start' \
 			-ex 'continue'
 
+dis: drmario.o
+	objdump $^ --disassemble
+
 size: drmario.asm
 	@perl -nE 'print unless /times 510|dw 0xaa55/' $^ > tmp.asm
 	@nasm -f elf32 -g3 -F dwarf tmp.asm -o tmp.o
@@ -35,4 +38,4 @@ size: drmario.asm
 clean:
 	rm -rf *.img *.elf *.o
 
-.PHONY: run clean drun size
+.PHONY: run clean drun size dis
