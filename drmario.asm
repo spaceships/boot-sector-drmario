@@ -42,13 +42,12 @@ start:
     mov ax,0x0013 ; set video mode vga 320x200x256
     int 0x10      ; call bios interrupt
 
+    int 0x1a ; bios clock read, reusing above's ah=0
+    mov [bp+rand],dx ; initialize rand
+
     mov ax,0xa000 ; set data & extra segments to video
     mov ds,ax
     mov es,ax
-
-    mov ah,0x00
-    int 0x1a ; bios clock read
-    mov [bp+rand],dx ; initialize rand
 
     ;;;;;;;;;;;;;;;;;
     ;; draw border ;;
