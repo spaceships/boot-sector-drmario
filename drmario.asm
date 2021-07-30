@@ -8,7 +8,7 @@ PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6b
 SPEED:          equ 4
-VIRUS_COUNT:    equ 1
+VIRUS_THRESH:   equ 250 ; closer to 255 => less frequent
 NUM_ROWS:       equ 16  ; Original: 16
 NUM_COLS:       equ 8   ; Original: 8
 
@@ -33,6 +33,7 @@ pill_offset:    equ pill_color + 2      ; [word]
 pill_sprite:    equ pill_offset + 2     ; [word]
 next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
+num_virii:      equ rand + 2            ; [byte]
 
 start:
     mov bp,base     ; set base address for global state
@@ -56,41 +57,14 @@ start:
     xor di,di
     rep stosb 
     ; draw black part
-    xor al,al
-    mov bx,BOARD_HEIGHT
-    mov di,BOARD_START
-db_row:
-    mov cx,BOARD_WIDTH
-    rep stosb
-    add di,320-BOARD_WIDTH
-    dec bx
-    jnz db_row
+    mov ax,clear_sprite
+    call each_sprite
 
     ;;;;;;;;;;;;;;;;;
     ;; place virii ;;
     ;;;;;;;;;;;;;;;;;
-    mov dx,VIRUS_COUNT
-    ; start at bottom right sprite and work back
-    mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
-pv_row:
-    mov cx,NUM_COLS
-pv_loop:
-    call rng
-    cmp ah,210
-    jb pv_continue
-    call rng
-    mov si,sprite_virus ; draw virus sprite
-    call draw_sprite
-    dec dx ; decrement virus count
-    jz pv_done
-pv_continue:
-    sub di,SPRITE_SIZE
-    loop pv_loop
-    ; if cx is 0, then subtract row
-    sub di,SPRITE_SIZE*320-BOARD_WIDTH
-    cmp di,BOARD_START
-    ja pv_row
-pv_done:
+    mov ax,place_virii
+    call each_sprite
     
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make a new pill ;;
@@ -209,29 +183,22 @@ pf_call:
     call pillmove ; pillmove sets ZF when it is successful
     jz pm_done    ; reuse pillmove's ret statement 
     ; there is something in the way, check for clears
-    mov di,[bp+pill_loc] 
-    mov bx,8
-    call check_and_mark
-    mov bx,SPRITE_SIZE*320
-    call check_and_mark
-    add di,[bp+pill_offset]
-    call check_and_mark
-    mov bx,8
-    call check_and_mark
+    mov ax,checkrows
+    call each_sprite
 pf_done: 
     jmp pillnew
 
-; checks and mark either all vertical or horizontal matches
-; di: starting point
-; bx: offset to use - either 8 for row checking 
-;     or 8*320 for col checking
-; mangles ax,cx
-check_and_mark:
-    push di
-    mov cx,3
-pf_checkrow:
-    push cx
-    ;; checking 4 in row starting at di
+; intended to be used with each_sprite
+checkrows:
+    mov bx,8
+    call check4 
+    mov bx,8*320
+    call check4 
+    ret
+
+;; checking 4 in row starting at di, offset by bx
+check4:
+    pusha
     mov al,[di+COMMON_PIXEL] ; get first sprite color
     mov cx,3
 c4_check:
@@ -246,10 +213,38 @@ c4_clear:
     sub di,bx ; subtract offset
     loop c4_clear
 c4_done:
-    sub di,bx ; decrement by 1 offset
-    pop cx
-    loop pf_checkrow
-    pop di
+    popa
+    ret
+
+; intended to be used with each_sprite
+place_virii:
+    call rng
+    cmp ah,VIRUS_THRESH
+    jb pm_done
+    mov si,sprite_virus ; draw virus sprite
+    jmp draw_sprite
+
+clear_sprite:
+    xor al,al
+    mov si,sprite_top ;; can be anything
+    jmp draw_sprite
+
+; call a function in ax with di set to start of each sprite
+each_sprite:
+    ; start at bottom right sprite and work back
+    mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
+es_outer:
+    mov cx,NUM_COLS
+es_inner:
+    pusha
+    call ax
+    popa
+    sub di,SPRITE_SIZE
+    loop es_inner
+    ; if cx is 0, then subtract row
+    sub di,SPRITE_SIZE*320-BOARD_WIDTH
+    cmp di,BOARD_START
+    ja es_outer
     ret
 
 ; ax: moving offset
@@ -303,7 +298,6 @@ ds_row:
     mov bl,al ; save it in bl
 ds_row_again:
     mov cx,7  ; ds_col row runs 7 times
-
 ds_col:
     xor al,al
     rol bl,1
@@ -312,8 +306,9 @@ ds_col:
 ds_print:
     stosb        ; print color to current pixel loc
     loop ds_col
-
-    add di,320-7   ; increment di: +1 row, -7 cols
+    xor al,al
+    stosb       ; write black pixel too
+    add di,320-8   ; increment di: +1 row, -8 cols
     ; The `ds_col` loop has run 7 times, rotating the original `bl` from
     ; `0xXXXXXXXR` 7 places to produce `0xRXXXXXXX`.  Shifting by 1 more bit
     ; copies R into the carry flag and sets `bl` to `0xXXXXXXX0`, so we'll draw
@@ -323,6 +318,9 @@ ds_print:
     jc ds_row_again
     jnz ds_row
 ds_end:
+    xor al,al
+    mov cx,8
+    rep stosb
     ; Preserve the final `si`, leaving it set to the start of the next sprite.
     ; `pilldraw` uses this to draw the second half of the two-part pill.
     mov bp,sp
