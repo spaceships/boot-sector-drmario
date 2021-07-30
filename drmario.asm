@@ -8,7 +8,7 @@ PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6b
 SPEED:          equ 4
-VIRUS_COUNT:    equ 8
+VIRUS_COUNT:    equ 1
 NUM_ROWS:       equ 16  ; Original: 16
 NUM_COLS:       equ 8   ; Original: 8
 
@@ -209,48 +209,48 @@ pf_call:
     call pillmove ; pillmove sets ZF when it is successful
     jz pm_done    ; reuse pillmove's ret statement 
     ; there is something in the way, check for clears
-    ; mov bx,SPRITE_SIZE
-    ; call check_and_clear ; check and clear row
-    ; mov bx,SPRITE_SIZE*320
-    ; call check_and_clear ; check and clear col
+    mov di,[bp+pill_loc] 
+    mov bx,8
+    call check_and_mark
+    mov bx,SPRITE_SIZE*320
+    call check_and_mark
+    add di,[bp+pill_offset]
+    call check_and_mark
+    mov bx,8
+    call check_and_mark
 pf_done: 
     jmp pillnew
 
-; ; checks and clear either all vertical or horizontal matches
-; ; bx: offset to use - either SPRITE_SIZE for row checking 
-; ;     or SPRITE_SIZE*320 for col checking
-; check_and_clear:
-;     mov di,[bp+pill_loc] 
-;     ; start at leftmost/topmost possible position
-;     sub di,bx
-;     sub di,bx
-;     sub di,bx
-;     mov cx,3
-; pf_checkrow:
-;     call check4
-;     add di,bx ; increment by 1 offset
-;     loop pf_checkrow
-
-; ; checks and clears 4 locs if there are common colors starting at di, offset by bx
-; check4:
-;     pusha
-;     mov al,[di+COMMON_PIXEL] ; get first sprite color
-;     mov cx,3
-;     mov dx,bx ; save offset
-; c4_check:
-;     cmp al,[di+bx+COMMON_PIXEL] ; compare all 3 offsets by bx
-;     jne c4_done ; if not equal, return
-;     add bx,bx ; add in offset
-;     loop c4_check
-;     mov cx,4 ; clear all 4 sprites
-;     mov si,sprite_none ; zero sprite
-; c4_clear:
-;     call draw_sprite ; zero out sprite
-;     add di,dx ; add in offset
-;     loop c4_clear
-; c4_done:
-;     popa
-;     ret
+; checks and mark either all vertical or horizontal matches
+; di: starting point
+; bx: offset to use - either 8 for row checking 
+;     or 8*320 for col checking
+; mangles ax,cx
+check_and_mark:
+    push di
+    mov cx,3
+pf_checkrow:
+    push cx
+    ;; checking 4 in row starting at di
+    mov al,[di+COMMON_PIXEL] ; get first sprite color
+    mov cx,3
+c4_check:
+    add di,bx ; add offset
+    cmp al,[di+COMMON_PIXEL] ; compare 3 offsets by bx
+    jne c4_done ; if not equal, return
+    loop c4_check
+    mov cx,4 ; clear all 4 sprites
+c4_clear:
+    mov si,sprite_clear
+    call draw_sprite ; al is set from above
+    sub di,bx ; subtract offset
+    loop c4_clear
+c4_done:
+    sub di,bx ; decrement by 1 offset
+    pop cx
+    loop pf_checkrow
+    pop di
+    ret
 
 ; ax: moving offset
 ; bx: checking offset 1
