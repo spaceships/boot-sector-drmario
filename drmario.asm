@@ -143,20 +143,6 @@ gl_clock:
     ;; the end ;;
     ;;;;;;;;;;;;;
 
-pillnew:
-    mov bx, BOARD_START+BOARD_WIDTH/2-CELL_SIZE
-    test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
-    jnz start                        ; if occupied, restart game
-    mov word [bp+pill_loc],bx
-    mov word [bp+pill_offset],8
-    mov word [bp+pill_sprite],sprite_left
-    call rng
-    mov cl,al
-    call rng
-    mov ah,cl
-    mov [bp+pill_color],ax
-    jmp pilldraw
-
 ; cl = 0 for rotate left, 8 for rotate right
 pillrot:
     mov bx,8^(-8*320)
@@ -173,6 +159,20 @@ pillrot:
     ror word [bp+pill_color],cl ; possibly swap colors
     call pilldraw
     jmp gl_clock
+
+pillnew:
+    mov bx, BOARD_START+BOARD_WIDTH/2-CELL_SIZE
+    test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
+    jnz start                        ; if occupied, restart game
+    mov word [bp+pill_loc],bx
+    mov word [bp+pill_offset],8
+    mov word [bp+pill_sprite],sprite_left
+    call rng
+    mov cl,al
+    call rng
+    mov ah,cl
+    mov [bp+pill_color],ax
+    jmp pilldraw
 
 pillfall:
     mov ax,8*320
