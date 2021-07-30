@@ -78,7 +78,7 @@ pv_loop:
     call rng
     cmp ah,210
     jb pv_continue
-    call rand_color
+    call rng
     mov si,sprite_virus ; draw virus sprite
     call draw_sprite
     dec dx ; decrement virus count
@@ -174,9 +174,9 @@ pillnew:
     mov word [bp+pill_loc],bx
     mov word [bp+pill_offset],8
     mov word [bp+pill_sprite],sprite_left
-    call rand_color
+    call rng
     mov cl,al
-    call rand_color
+    call rng
     mov ah,cl
     mov [bp+pill_color],ax
     jmp pilldraw
@@ -330,22 +330,23 @@ ds_end:
     popa
     ret
 
-; put a random word into ax
+; put a random color from colors array into al
+; put a random byte into ah
 rng:
+    ; This implements an LFSR with two taps: the sequence of bits satisfies
+    ; the recurrence R(n) = R(n-7) + R(n-15).
+    ; As x^15 + x^7 + 1 is a primitive polynomial in GF(2), this sequence
+    ; attains the maximal period of 2^15-1 = 32767.
+    ; Each call to this routine advances the LFSR by 7 bits, shifting in
+    ; new bits on the left.
     mov ax,[bp+rand]
     mov bx,ax
     xor bl,bh
-    rcr bl,2      ; put bit 1 into carry flag
-    rcr ax,1
+    shr ax,7
+    mov ah,bl
     mov [bp+rand],ax ; save new seed
-    ret
-
-; put a random color from colors array into al
-rand_color:
-    call rng
-    call rng
     and al,3      ; mask off bottom 2 bits of al
-    jz rand_color ; make sure at least one bit is set
+    jz rng        ; make sure at least one bit is set
     mov bx,colors-1
     cs xlat     ; al = [colors + al]
     ret
