@@ -8,9 +8,10 @@ PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6b
 SPEED:          equ 4
-VIRUS_THRESH:   equ 250 ; closer to 255 => less frequent
-NUM_ROWS:       equ 16  ; Original: 16
-NUM_COLS:       equ 8   ; Original: 8
+VIRUS_THRESH:   equ 220 ; closer to 255 => less frequent
+VIRUS_MAX:      equ 8 ; max num virii
+NUM_ROWS:       equ 16 ; Original: 16
+NUM_COLS:       equ 8 ; Original: 8
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; fixed parameters ;;
@@ -183,20 +184,23 @@ pf_call:
     call pillmove ; pillmove sets ZF when it is successful
     jz pm_done    ; reuse pillmove's ret statement 
     ; there is something in the way, check for clears
-    mov ax,checkrows
+    mov ax,matchcheck
     call each_sprite
 pf_done: 
     jmp pillnew
 
-; intended to be used with each_sprite
-checkrows:
+; check the column up to 4 below and 4 to the right
+; changes matches into sprite_clear
+; -intended to be used with each_sprite
+matchcheck:
     mov bx,8
     call check4 
     mov bx,8*320
     call check4 
     ret
 
-;; checking 4 in row starting at di, offset by bx
+; checking 4 in row starting at di, offset by bx
+; -helper for matchcheck
 check4:
     pusha
     mov al,[di+COMMON_PIXEL] ; get first sprite color
@@ -216,17 +220,24 @@ c4_done:
     popa
     ret
 
-; intended to be used with each_sprite
+; clear the sprite starting at di
+; -used with each_sprite to initially set the board
+clear_sprite:
+    xor al,al
+    jmp pv_set_sprite
+
+; maybe place a virus at di, if there aren't too many already and 
+; the virus wins the dice roll
+; -intended to be used with each_sprite
 place_virii:
+    cmp byte [bp+num_virii],VIRUS_MAX
+    jae pm_done
     call rng
     cmp ah,VIRUS_THRESH
     jb pm_done
+    inc byte [bp+num_virii]
+pv_set_sprite:
     mov si,sprite_virus ; draw virus sprite
-    jmp draw_sprite
-
-clear_sprite:
-    xor al,al
-    mov si,sprite_top ;; can be anything
     jmp draw_sprite
 
 ; call a function in ax with di set to start of each sprite
