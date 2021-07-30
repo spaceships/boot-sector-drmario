@@ -320,7 +320,7 @@ matchcheck:
 ; checking 4 in row starting at di, offset by bx
 ; -helper for matchcheck
 check4:
-    pusha
+    push di ; di can be mangled arbitrarily
     mov al,[di+COMMON_PIXEL] ; get first sprite color
     mov cx,3
 c4_check:
@@ -335,7 +335,7 @@ c4_clear:
     sub di,bx ; subtract offset
     loop c4_clear
 c4_done:
-    popa
+    pop di
     ret
 
 ; call a function in ax with di set to start of each cell on the board
