@@ -16,10 +16,11 @@ NUM_COLS:       equ 8 ; Original: 8
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; fixed parameters ;;
 ;;;;;;;;;;;;;;;;;;;;;;
-SPRITE_SIZE:  equ 8
-SPRITE_ROWS:  equ 7
-BOARD_HEIGHT: equ SPRITE_SIZE*NUM_ROWS
-BOARD_WIDTH:  equ SPRITE_SIZE*NUM_COLS
+CELL_SIZE:    equ 8             ; size of square board cells in pixels
+SPRITE_ROWS:  equ 7             ; vertical size of sprite in pixels
+SPRITE_COLS:  equ 7             ; horizontal size of sprite in pixels
+BOARD_HEIGHT: equ CELL_SIZE*NUM_ROWS
+BOARD_WIDTH:  equ CELL_SIZE*NUM_COLS
 BOARD_START:  equ (100-BOARD_HEIGHT/2)*320+(160-BOARD_WIDTH/2)
 BOARD_END:    equ (100+BOARD_HEIGHT/2)*320+(160+BOARD_WIDTH/2)
 COMMON_PIXEL: equ 5
@@ -56,17 +57,17 @@ start:
     mov al,BORDER_COLOR
     mov cx,320*200
     xor di,di
-    rep stosb 
+    rep stosb
     ; draw black part
     mov ax,clear_sprite
-    call each_sprite
+    call each_cell
 
     ;;;;;;;;;;;;;;;;;
     ;; place virii ;;
     ;;;;;;;;;;;;;;;;;
     mov ax,place_virii
-    call each_sprite
-    
+    call each_cell
+
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make a new pill ;;
     ;;;;;;;;;;;;;;;;;;;;;
@@ -80,7 +81,7 @@ game_loop:
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
     ; preamble, setting up movement
-    mov bx,8        
+    mov bx,8
     mov cx,[bp+pill_offset]
     test cx,cx ; is pill offset negative? pill vertical?
     js gl_offset_ok
@@ -111,7 +112,7 @@ gl_check_right:
 gl_check_down:
     cmp al,0x50 ; down arrow
     jne gl_check_a
-    call pillfall 
+    call pillfall
 
 gl_check_a:
     xor cl,cl ; swap colors when going horiz
@@ -143,7 +144,7 @@ gl_clock:
     ;;;;;;;;;;;;;
 
 pillnew:
-    mov bx, BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
+    mov bx, BOARD_START+BOARD_WIDTH/2-CELL_SIZE
     test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
     jnz start                        ; if occupied, restart game
     mov word [bp+pill_loc],bx
@@ -182,22 +183,21 @@ pillfall:
     xor cx,cx   ; when falling with vertical pill
 pf_call:
     call pillmove ; pillmove sets ZF when it is successful
-    jz pm_done    ; reuse pillmove's ret statement 
+    jz pm_done    ; reuse pillmove's ret statement
     ; there is something in the way, check for clears
     mov ax,matchcheck
-    call each_sprite
+    call each_cell
 pf_done: 
     jmp pillnew
 
 ; check the column up to 4 below and 4 to the right
 ; changes matches into sprite_clear
-; -intended to be used with each_sprite
+; -intended to be used with each_cell
 matchcheck:
     mov bx,8
-    call check4 
+    call check4
     mov bx,8*320
-    call check4 
-    ret
+    ; fall through to check4
 
 ; checking 4 in row starting at di, offset by bx
 ; -helper for matchcheck
@@ -226,9 +226,9 @@ clear_sprite:
     xor al,al
     jmp pv_set_sprite
 
-; maybe place a virus at di, if there aren't too many already and 
+; potentially place a virus at di, if there aren't too many already and 
 ; the virus wins the dice roll
-; -intended to be used with each_sprite
+; -intended to be used with each_cell
 place_virii:
     cmp byte [bp+num_virii],VIRUS_MAX
     jae pm_done
@@ -240,24 +240,23 @@ pv_set_sprite:
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
 
-; call a function in ax with di set to start of each sprite
-each_sprite:
-    ; start at bottom right sprite and work back - 
-    ; this is for place_virii so it can place most of them
-    ; at the bottom (eventually)
-    mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
-es_outer:
+; call a function in ax with di set to start of each cell on the board
+each_cell:
+    ; start at bottom right cell and work back.
+    ; this is for place_virii so it can place most of them at the bottom.
+    mov di,BOARD_END-CELL_SIZE*320-CELL_SIZE
+ec_outer:
     mov cx,NUM_COLS
-es_inner:
+ec_inner:
     pusha
     call ax
     popa
-    sub di,SPRITE_SIZE
-    loop es_inner
+    sub di,CELL_SIZE
+    loop ec_inner
     ; if cx is 0, then subtract row
-    sub di,SPRITE_SIZE*320-BOARD_WIDTH
+    sub di,CELL_SIZE*320-BOARD_WIDTH
     cmp di,BOARD_START
-    ja es_outer
+    ja ec_outer
     ret
 
 ; ax: moving offset
@@ -273,7 +272,7 @@ pm_test:
     jnz pm_done
 pm_move:
     push ax
-    call pillclear 
+    call pillclear
     pop ax
     add word [bp+pill_loc],ax
     call pilldraw
@@ -310,7 +309,7 @@ ds_row:
     cs lodsb  ; load byte of the sprite into al, advance si
     mov bl,al ; save it in bl
 ds_row_again:
-    mov cx,7  ; ds_col row runs 7 times
+    mov cx,SPRITE_COLS  ; ds_col row runs 7 times
 ds_col:
     xor al,al
     rol bl,1
