@@ -15,10 +15,11 @@ NUM_COLS:       equ 8   ; Original: 8
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; fixed parameters ;;
 ;;;;;;;;;;;;;;;;;;;;;;
-SPRITE_SIZE:  equ 8
-SPRITE_ROWS:  equ 7
-BOARD_HEIGHT: equ SPRITE_SIZE*NUM_ROWS
-BOARD_WIDTH:  equ SPRITE_SIZE*NUM_COLS
+CELL_SIZE:    equ 8             ; size of square board cells in pixels
+SPRITE_ROWS:  equ 7             ; vertical size of sprite in pixels
+SPRITE_COLS:  equ 7             ; horizontal size of sprite in pixels
+BOARD_HEIGHT: equ CELL_SIZE*NUM_ROWS
+BOARD_WIDTH:  equ CELL_SIZE*NUM_COLS
 BOARD_START:  equ (100-BOARD_HEIGHT/2)*320+(160-BOARD_WIDTH/2)
 BOARD_END:    equ (100+BOARD_HEIGHT/2)*320+(160+BOARD_WIDTH/2)
 COMMON_PIXEL: equ 5
@@ -58,13 +59,13 @@ start:
     rep stosb
     ; draw black part
     mov ax,clear_sprite
-    call each_sprite
+    call each_cell
 
     ;;;;;;;;;;;;;;;;;
     ;; place virii ;;
     ;;;;;;;;;;;;;;;;;
     mov ax,place_virii
-    call each_sprite
+    call each_cell
 
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make a new pill ;;
@@ -142,7 +143,7 @@ gl_clock:
     ;;;;;;;;;;;;;
 
 pillnew:
-    mov bx, BOARD_START+BOARD_WIDTH/2-SPRITE_SIZE
+    mov bx, BOARD_START+BOARD_WIDTH/2-CELL_SIZE
     test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
     jnz start                        ; if occupied, restart game
     mov word [bp+pill_loc],bx
@@ -184,11 +185,11 @@ pf_call:
     jz pm_done    ; reuse pillmove's ret statement
     ; there is something in the way, check for clears
     mov ax,checkrows
-    call each_sprite
+    call each_cell
 pf_done:
     jmp pillnew
 
-; intended to be used with each_sprite
+; intended to be used with each_cell
 checkrows:
     mov bx,8
     call check4
@@ -215,7 +216,7 @@ c4_done:
     popa
     ret
 
-; intended to be used with each_sprite
+; intended to be used with each_cell
 place_virii:
     call rng
     cmp ah,VIRUS_THRESH
@@ -228,22 +229,22 @@ clear_sprite:
     mov si,sprite_top ;; can be anything
     jmp draw_sprite
 
-; call a function in ax with di set to start of each sprite
-each_sprite:
-    ; start at bottom right sprite and work back -
+; call a function in ax with di set to start of each cell on the board
+each_cell:
+    ; start at bottom right cell and work back -
     ; this is for place_virii so it can place most of them
     ; at the bottom (eventually)
-    mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE
+    mov di,BOARD_END-CELL_SIZE*320-CELL_SIZE
 es_outer:
     mov cx,NUM_COLS
 es_inner:
     pusha
     call ax
     popa
-    sub di,SPRITE_SIZE
+    sub di,CELL_SIZE
     loop es_inner
     ; if cx is 0, then subtract row
-    sub di,SPRITE_SIZE*320-BOARD_WIDTH
+    sub di,CELL_SIZE*320-BOARD_WIDTH
     cmp di,BOARD_START
     ja es_outer
     ret
@@ -298,7 +299,7 @@ ds_row:
     cs lodsb  ; load byte of the sprite into al, advance si
     mov bl,al ; save it in bl
 ds_row_again:
-    mov cx,7  ; ds_col row runs 7 times
+    mov cx,SPRITE_COLS  ; ds_col row runs 7 times
 ds_col:
     xor al,al
     rol bl,1
