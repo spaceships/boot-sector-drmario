@@ -55,7 +55,7 @@ start:
     mov al,BORDER_COLOR
     mov cx,320*200
     xor di,di
-    rep stosb 
+    rep stosb
     ; draw black part
     mov ax,clear_sprite
     call each_sprite
@@ -65,7 +65,7 @@ start:
     ;;;;;;;;;;;;;;;;;
     mov ax,place_virii
     call each_sprite
-    
+
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make a new pill ;;
     ;;;;;;;;;;;;;;;;;;;;;
@@ -79,7 +79,7 @@ game_loop:
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
     ; preamble, setting up movement
-    mov bx,8        
+    mov bx,8
     mov cx,[bp+pill_offset]
     test cx,cx ; is pill offset negative? pill vertical?
     js gl_offset_ok
@@ -110,7 +110,7 @@ gl_check_right:
 gl_check_down:
     cmp al,0x50 ; down arrow
     jne gl_check_a
-    call pillfall 
+    call pillfall
 
 gl_check_a:
     xor cl,cl ; swap colors when going horiz
@@ -181,19 +181,19 @@ pillfall:
     xor cx,cx   ; when falling with vertical pill
 pf_call:
     call pillmove ; pillmove sets ZF when it is successful
-    jz pm_done    ; reuse pillmove's ret statement 
+    jz pm_done    ; reuse pillmove's ret statement
     ; there is something in the way, check for clears
     mov ax,checkrows
     call each_sprite
-pf_done: 
+pf_done:
     jmp pillnew
 
 ; intended to be used with each_sprite
 checkrows:
     mov bx,8
-    call check4 
+    call check4
     mov bx,8*320
-    call check4 
+    call check4
     ret
 
 ;; checking 4 in row starting at di, offset by bx
@@ -231,10 +231,10 @@ clear_sprite:
 
 ; call a function in ax with di set to start of each sprite
 each_sprite:
-    ; start at bottom right sprite and work back - 
+    ; start at bottom right sprite and work back -
     ; this is for place_virii so it can place most of them
     ; at the bottom (eventually)
-    mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
+    mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE
 es_outer:
     mov cx,NUM_COLS
 es_inner:
@@ -262,7 +262,7 @@ pm_test:
     jnz pm_done
 pm_move:
     push ax
-    call pillclear 
+    call pillclear
     pop ax
     add word [bp+pill_loc],ax
     call pilldraw
