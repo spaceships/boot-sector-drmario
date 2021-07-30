@@ -193,8 +193,7 @@ checkrows:
     mov bx,8
     call check4
     mov bx,8*320
-    call check4
-    ret
+    ; fall through to check4
 
 ;; checking 4 in row starting at di, offset by bx
 check4:
