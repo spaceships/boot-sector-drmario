@@ -123,8 +123,7 @@ gl_check_right:
 
 gl_check_down:
     cmp al,0x50 ; down arrow
-    jne gl_check_a
-    call pillfall
+    je gl_fall
 
 gl_check_a:
     xor cl,cl ; swap colors when going horiz
@@ -149,6 +148,7 @@ gl_clock:
     ;;;;;;;;;;;;;;;;;;;;;;;;
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
+gl_fall:
     call pillfall
     jmp game_loop
     ;;;;;;;;;;;;;
