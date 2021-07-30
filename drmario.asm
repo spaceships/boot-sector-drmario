@@ -190,36 +190,6 @@ pf_call:
 pf_done: 
     jmp pillnew
 
-; check the column up to 4 below and 4 to the right
-; changes matches into sprite_clear
-; -intended to be used with each_cell
-matchcheck:
-    mov bx,8
-    call check4
-    mov bx,8*320
-    ; fall through to check4
-
-; checking 4 in row starting at di, offset by bx
-; -helper for matchcheck
-check4:
-    pusha
-    mov al,[di+COMMON_PIXEL] ; get first sprite color
-    mov cx,3
-c4_check:
-    add di,bx ; add offset
-    cmp al,[di+COMMON_PIXEL] ; compare 3 offsets by bx
-    jne c4_done ; if not equal, return
-    loop c4_check
-    mov cx,4 ; clear all 4 sprites
-c4_clear:
-    mov si,sprite_clear
-    call draw_sprite ; al is set from above
-    sub di,bx ; subtract offset
-    loop c4_clear
-c4_done:
-    popa
-    ret
-
 ; clear the sprite starting at di
 ; -used with each_sprite to initially set the board
 clear_sprite:
@@ -239,25 +209,6 @@ place_virii:
 pv_set_sprite:
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
-
-; call a function in ax with di set to start of each cell on the board
-each_cell:
-    ; start at bottom right cell and work back.
-    ; this is for place_virii so it can place most of them at the bottom.
-    mov di,BOARD_END-CELL_SIZE*320-CELL_SIZE
-ec_outer:
-    mov cx,NUM_COLS
-ec_inner:
-    pusha
-    call ax
-    popa
-    sub di,CELL_SIZE
-    loop ec_inner
-    ; if cx is 0, then subtract row
-    sub di,CELL_SIZE*320-BOARD_WIDTH
-    cmp di,BOARD_START
-    ja ec_outer
-    ret
 
 ; ax: moving offset
 ; bx: checking offset 1
@@ -359,6 +310,55 @@ rng:
     jz rng        ; make sure at least one bit is set
     mov bx,colors-1
     cs xlat     ; al = [colors + al]
+    ret
+
+; check the column up to 4 below and 4 to the right
+; changes matches into sprite_clear
+; -intended to be used with each_cell
+matchcheck:
+    mov bx,8
+    call check4
+    mov bx,8*320
+    ; fall through to check4
+
+; checking 4 in row starting at di, offset by bx
+; -helper for matchcheck
+check4:
+    pusha
+    mov al,[di+COMMON_PIXEL] ; get first sprite color
+    mov cx,3
+c4_check:
+    add di,bx ; add offset
+    cmp al,[di+COMMON_PIXEL] ; compare 3 offsets by bx
+    jne c4_done ; if not equal, return
+    loop c4_check
+    mov cx,4 ; clear all 4 sprites
+c4_clear:
+    mov si,sprite_clear
+    call draw_sprite ; al is set from above
+    sub di,bx ; subtract offset
+    loop c4_clear
+c4_done:
+    popa
+    ret
+
+; call a function in ax with di set to start of each cell on the board
+each_cell:
+    ; start at bottom right cell and work back.
+    ; this is for place_virii so it can place most of them at the bottom.
+    mov di,BOARD_END-CELL_SIZE*320-CELL_SIZE
+ec_outer:
+    mov cx,NUM_COLS
+ec_inner:
+    pusha
+    call ax
+    popa
+    sub di,CELL_SIZE
+    loop ec_inner
+    ; if cx is 0, then subtract row
+    sub di,CELL_SIZE*320-BOARD_WIDTH
+    cmp di,BOARD_START
+    ja ec_outer
     ret
 
 ; All sprites consist of 7 rows of 7 pixels.
