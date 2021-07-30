@@ -231,7 +231,9 @@ clear_sprite:
 
 ; call a function in ax with di set to start of each sprite
 each_sprite:
-    ; start at bottom right sprite and work back
+    ; start at bottom right sprite and work back - 
+    ; this is for place_virii so it can place most of them
+    ; at the bottom (eventually)
     mov di,BOARD_END-SPRITE_SIZE*320-SPRITE_SIZE 
 es_outer:
     mov cx,NUM_COLS
@@ -307,7 +309,7 @@ ds_print:
     stosb        ; print color to current pixel loc
     loop ds_col
     xor al,al
-    stosb       ; write black pixel too
+    stosb       ; write black pixel too, for draw border
     add di,320-8   ; increment di: +1 row, -8 cols
     ; The `ds_col` loop has run 7 times, rotating the original `bl` from
     ; `0xXXXXXXXR` 7 places to produce `0xRXXXXXXX`.  Shifting by 1 more bit
@@ -318,7 +320,7 @@ ds_print:
     jc ds_row_again
     jnz ds_row
 ds_end:
-    xor al,al
+    xor al,al ; write bottom row 0s for draw border
     mov cx,8
     rep stosb
     ; Preserve the final `si`, leaving it set to the start of the next sprite.
