@@ -38,16 +38,16 @@ rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
 
 start:
-    mov bp,base     ; set base address for global state
-    mov ax,0x0013   ; set video mode vga 320x200x256
-    int 0x10        ; call bios interrupt
+    mov bp,base   ; set base address for global state
+    mov ax,0x0013 ; set video mode vga 320x200x256
+    int 0x10      ; call bios interrupt
 
-    mov ax,0xa000   ; set data & extra segments to video
+    mov ax,0xa000 ; set data & extra segments to video
     mov ds,ax
     mov es,ax
 
     mov ah,0x00
-    int 0x1a      ; bios clock read
+    int 0x1a ; bios clock read
     mov [bp+rand],dx ; initialize rand
 
     ;;;;;;;;;;;;;;;;;
@@ -59,12 +59,23 @@ start:
     xor di,di
     rep stosb
     ; draw black part
-    mov ax,clear_sprite
-    call each_cell
+    xor al,al
+    mov di,BOARD_START
+    mov dx,BOARD_HEIGHT
+db_black:
+    mov cx,BOARD_WIDTH
+    rep stosb
+    add di,320-BOARD_WIDTH
+    dec dx
+    jnz db_black
 
     ;;;;;;;;;;;;;;;;;
     ;; place virii ;;
     ;;;;;;;;;;;;;;;;;
+    ; initialize num_virii 
+    ; this is needed when you have multiple runs, like at game over. 
+    ; otherwise, no virii appear.
+    mov byte [bp+num_virii],al ; reuse al=0 from above
     mov ax,place_virii
     call each_cell
 
@@ -85,16 +96,17 @@ game_loop:
     mov cx,[bp+pill_offset]
     test cx,cx ; is pill offset negative? pill vertical?
     js gl_offset_ok
-    shl bx,1        ; R horizontal, mul bx by 2
-    xor cx,cx       ; LR/horiz: only check 1 place
+    shl bx,1  ; R horizontal, mul bx by 2
+    xor cx,cx ; LR/horiz: only check 1 place
 gl_offset_ok:
 
+    ; get the actual key, if it is pressed
     mov ah,0x01 ; bios key available
-    int 0x16
-    mov ah,0x00
+    int 0x16 ; sets ZF=1 if no keystroke available
     je gl_check_left
-    int 0x16    ; ah = key scan code
-    mov al,ah
+    mov ah,0x00 ; bios get keystroke
+    int 0x16    ; ah=key scan code
+    mov al,ah   ; move to al since cmp al,x is 1 byte cheaper
 
 gl_check_left:
     cmp al,0x4b ; left arrow
@@ -129,7 +141,7 @@ gl_check_s:
     ;;;;;;;;;;;;;;;;
 gl_clock:
     mov ah,0x00
-    int 0x1a    ; bios clock read
+    int 0x1a ; bios clock read
     cmp dx,[bp+next_tick]
     jb game_loop
     add dx,SPEED
@@ -146,12 +158,12 @@ gl_clock:
 ; cl = 0 for rotate left, 8 for rotate right
 pillrot:
     mov bx,8^(-8*320)
-    xor bx,[bp+pill_offset]    ; toggle between +8 (horiz) and -8*320 (vert)
+    xor bx,[bp+pill_offset] ; toggle between +8 (horiz) and -8*320 (vert)
     mov dx,((sprite_bottom-start)^(sprite_left-start))
-    xor dx,[bp+pill_sprite]    ; toggle between sprite_left and sprite_bottom
+    xor dx,[bp+pill_sprite] ; toggle between sprite_left and sprite_bottom
     mov di,[bp+pill_loc]
     test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz gl_clock               ; no rotate, return
+    jnz gl_clock ; no rotate, return
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
     mov [bp+pill_sprite],dx ; actually change sprite
@@ -176,7 +188,7 @@ pf_call:
     ; fall through to pillnew
 
 pillnew:
-    mov bx, BOARD_START+BOARD_WIDTH/2-CELL_SIZE
+    mov bx,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
     test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
     jnz start                        ; if occupied, restart game
     mov word [bp+pill_loc],bx
@@ -189,23 +201,16 @@ pillnew:
     mov [bp+pill_color],ax
     jmp pilldraw
 
-; clear the sprite starting at di
-; -used with each_sprite to initially set the board
-clear_sprite:
-    xor al,al
-    jmp pv_set_sprite
-
 ; potentially place a virus at di, if there aren't too many already and 
 ; the virus wins the dice roll
 ; -intended to be used with each_cell
 place_virii:
     cmp byte [bp+num_virii],VIRUS_MAX
-    jae pm_done
+    jae pm_done ; return
     call rng
     cmp ah,VIRUS_THRESH
-    jb pm_done
+    jb pm_done ; return
     inc byte [bp+num_virii]
-pv_set_sprite:
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
 
@@ -214,13 +219,11 @@ pv_set_sprite:
 ; cx: checking offset 2 (in addition to bx)
 pillmove:
     mov di,[bp+pill_loc]
-pm_test:
     test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz pm_done
+    jnz pm_done ; return
     add bx,cx
     test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz pm_done
-pm_move:
+    jnz pm_done ; return
     push ax
     call pillclear
     pop ax
@@ -244,7 +247,6 @@ pd_common:
     call draw_sprite
     ; `draw_sprite` leaves `si` set to the start of the next sprite
     mov al,ah
-pd_draw_sprite:
     add di,[bp+pill_offset]
     ; fall through to draw_sprite
 
@@ -268,9 +270,7 @@ ds_col:
 ds_print:
     stosb        ; print color to current pixel loc
     loop ds_col
-    xor al,al
-    stosb       ; write black pixel too, for draw border
-    add di,320-8   ; increment di: +1 row, -8 cols
+    add di,320-7   ; increment di: +1 row, -8 cols
     ; The `ds_col` loop has run 7 times, rotating the original `bl` from
     ; `0xXXXXXXXR` 7 places to produce `0xRXXXXXXX`.  Shifting by 1 more bit
     ; copies R into the carry flag and sets `bl` to `0xXXXXXXX0`, so we'll draw
@@ -280,9 +280,6 @@ ds_print:
     jc ds_row_again
     jnz ds_row
 ds_end:
-    xor al,al ; write bottom row 0s for draw border
-    mov cx,8
-    rep stosb
     ; Preserve the final `si`, leaving it set to the start of the next sprite.
     ; `pilldraw` uses this to draw the second half of the two-part pill.
     mov bp,sp
@@ -305,10 +302,11 @@ rng:
     shr ax,7
     mov ah,bl
     mov [bp+rand],ax ; save new seed
-    and al,3      ; mask off bottom 2 bits of al
-    jz rng        ; make sure at least one bit is set
+    ; ah is set: set al to be a random color from the colors array
+    and al,3 ; mask off bottom 2 bits of al
+    jz rng   ; make sure at least one bit is set
     mov bx,colors-1
-    cs xlat     ; al = [colors + al]
+    cs xlat  ; al = [colors + al]
     ret
 
 ; check the column up to 4 below and 4 to the right
