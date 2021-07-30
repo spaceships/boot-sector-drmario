@@ -160,20 +160,6 @@ pillrot:
     call pilldraw
     jmp gl_clock
 
-pillnew:
-    mov bx, BOARD_START+BOARD_WIDTH/2-CELL_SIZE
-    test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
-    jnz start                        ; if occupied, restart game
-    mov word [bp+pill_loc],bx
-    mov word [bp+pill_offset],8
-    mov word [bp+pill_sprite],sprite_left
-    call rng
-    mov cl,al
-    call rng
-    mov ah,cl
-    mov [bp+pill_color],ax
-    jmp pilldraw
-
 pillfall:
     mov ax,8*320
     mov bx,ax
@@ -187,8 +173,21 @@ pf_call:
     ; there is something in the way, check for clears
     mov ax,matchcheck
     call each_cell
-pf_done: 
-    jmp pillnew
+    ; fall through to pillnew
+
+pillnew:
+    mov bx, BOARD_START+BOARD_WIDTH/2-CELL_SIZE
+    test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
+    jnz start                        ; if occupied, restart game
+    mov word [bp+pill_loc],bx
+    mov word [bp+pill_offset],8
+    mov word [bp+pill_sprite],sprite_left
+    call rng
+    mov cl,al
+    call rng
+    mov ah,cl
+    mov [bp+pill_color],ax
+    jmp pilldraw
 
 ; clear the sprite starting at di
 ; -used with each_sprite to initially set the board
