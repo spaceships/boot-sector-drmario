@@ -1,5 +1,9 @@
     bits 16
 
+; conditionally compile certain features for space
+%assign enable_virii 1 
+%assign enable_rng 1 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -7,7 +11,7 @@ PILL_RED:       equ 0x27
 PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6b
-SPEED:          equ 4
+SPEED:          equ 4 ; higher = slower
 VIRUS_THRESH:   equ 220 ; closer to 255 => less frequent
 VIRUS_MAX:      equ 8 ; max num virii
 NUM_ROWS:       equ 16 ; Original: 16
@@ -74,9 +78,11 @@ db_black:
     ; initialize num_virii 
     ; this is needed when you have multiple runs, like at game over. 
     ; otherwise, no virii appear.
+%if enable_virii > 0
     mov byte [bp+num_virii],al ; reuse al=0 from above
     mov ax,place_virii
     call each_cell
+%endif
 
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make a new pill ;;
@@ -203,6 +209,7 @@ pillnew:
 ; potentially place a virus at di, if there aren't too many already and 
 ; the virus wins the dice roll
 ; -intended to be used with each_cell
+%if enable_virii > 0
 place_virii:
     cmp byte [bp+num_virii],VIRUS_MAX
     jae pm_done ; return
@@ -212,6 +219,7 @@ place_virii:
     inc byte [bp+num_virii]
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
+%endif
 
 ; ax: moving offset
 ; bx: checking offset 1
@@ -289,6 +297,7 @@ ds_end:
 ; put a random color from colors array into al
 ; put a random byte into ah
 rng:
+%if enable_rng > 0
     ; This implements an LFSR with two taps: the sequence of bits satisfies
     ; the recurrence R(n) = R(n-7) + R(n-15).
     ; As x^15 + x^7 + 1 is a primitive polynomial in GF(2), this sequence
@@ -307,6 +316,11 @@ rng:
     mov bx,colors-1
     cs xlat  ; al = [colors + al]
     ret
+%else
+    mov ah,0xFF
+    mov al,PILL_BLUE
+    ret
+%endif
 
 ; check the column up to 4 below and 4 to the right
 ; changes matches into sprite_clear
