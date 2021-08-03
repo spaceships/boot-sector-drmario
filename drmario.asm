@@ -12,6 +12,7 @@ PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6b
 SPEED:          equ 4 ; higher = slower
+PAUSE_LEN:      equ 10 ; higher = slower
 VIRUS_THRESH:   equ 220 ; closer to 255 => less frequent
 VIRUS_MAX:      equ 8 ; max num virii
 NUM_ROWS:       equ 16 ; Original: 16
@@ -40,6 +41,7 @@ pill_sprite:    equ pill_offset + 2     ; [word]
 next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
+clear_flag:     equ num_virii + 1       ; [byte]
 
 start:
     mov bp,base   ; set base address for global state
@@ -96,7 +98,7 @@ pillnew:
     mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
     mov bx,8 ; initial rotation
     mov word [bp+pill_sprite],sprite_left
-    call pillcheck_no_clear ; don't clear previous pill
+    call pillmove_no_clear ; don't clear previous pill
     jnz start ; if occupied, restart game
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -134,7 +136,7 @@ gl_check_down:
 gl_check_a:
     xor cl,cl ; swap colors when going horiz
     cmp al,0x1e ; 'a'
-    je pillrot
+    je gl_rotate_pill
 
 gl_check_s:
     mov cl,8 ; swap colors when going virt
@@ -142,20 +144,19 @@ gl_check_s:
     jne gl_clock
 
 ; cl = 0 for rotate left, 8 for rotate right
-pillrot:
+gl_rotate_pill:
     mov bx,8^(-8*320)
     xor bx,[bp+pill_offset] ; toggle between +8 (horiz) and -8*320 (vert)
     mov dx,((sprite_bottom-start)^(sprite_left-start))
     xor dx,[bp+pill_sprite] ; toggle between sprite_left and sprite_bottom
     test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz gl_clock ; no rotate, return
+    jnz gl_clock ; no rotate
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
     mov [bp+pill_sprite],dx ; actually change sprite
     xor cl,bl               ; set 8 or 0 depending on orientation
     ror word [bp+pill_color],cl ; possibly swap colors
     call pilldraw
-    ; fall through to gl_clock
 
     ;;;;;;;;;;;;;;;;
     ;; game clock ;;
@@ -173,26 +174,43 @@ gl_clock:
 pillfall:
     add di,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
-    jz game_loop
-    ; there is something in the way, check for clears
-    mov ax,matchcheck
-    call each_cell
-    jmp pillnew
+    jz game_loop ; no obstructions, continue game loop
+    ;;;;;;;;;;;;;;;;;;;;;;
+    ;; check for clears ;;
+    ;;;;;;;;;;;;;;;;;;;;;;
+    mov ax,matchcheck ; check for a match, change it to sprite_clear
+    call each_cell ; run matchcheck on every cell
+    test byte [bp+clear_flag],0xFF ; was the clear_flag set?
+    jz pillnew ; if not, continue game
+    call pause ; otherwise, pause
+    mov ax,clearmarked ; clear cells that look like sprite_clear
+    call each_cell ; run clearmarked on every cell
+    mov byte [bp+clear_flag],0 ; reset clear_flag
+    jmp pillnew ; continue game
+    ;;;;;;;;;;;;;;;;;;;;;;
+    ;; end of game loop ;;
+    ;;;;;;;;;;;;;;;;;;;;;;
+
+pause:
+    mov ah,0x00
+    int 0x1a ; bios clock read
+    mov bx,dx ; save result
+    add bx,PAUSE_LEN
+p_loop:
+    int 0x1a ; bios clock read
+    cmp bx,dx
+    jne p_loop
+    ret
 
 ; di: proposed location
-pillmove:
-    mov bx,[bp+pill_offset] ; load cur offset
-    ; fall through to pillcheck
-
-; di: proposed loc
-; bx: proposed offset
 ; sets ZF=1 if nothing is in the way
 ; sets pill_loc=di and pill_offset=bx if possible
-pillcheck:
+pillmove:
+    mov bx,[bp+pill_offset] ; load cur offset
     push di
     call pillclear ; clear pill avoiding interference
     pop di
-pillcheck_no_clear:
+pillmove_no_clear:
     mov al,[di+COMMON_PIXEL]
     or al,[di+COMMON_PIXEL+bx] ; is either cell occupied?
     jnz pm_restore ; if yes, restore pill and return
@@ -317,6 +335,8 @@ matchcheck:
 check4:
     push di ; di can be mangled arbitrarily
     mov al,[di+COMMON_PIXEL] ; get first sprite color
+    test al,al
+    jz c4_done ; ignore black cells
     mov cx,3
 c4_check:
     add di,bx ; add offset
@@ -329,6 +349,7 @@ c4_clear:
     call draw_sprite ; al is set from above
     sub di,bx ; subtract offset
     loop c4_clear
+    inc byte [bp+clear_flag] ; set global clear flag
 c4_done:
     pop di
     ret
@@ -351,6 +372,13 @@ ec_inner:
     cmp di,BOARD_START
     ja ec_outer
     ret
+
+; clear all cells which are marked for deletion
+clearmarked:
+    test byte [di+2*320+3],0xFF ; unique 0 pixel in sprite clear
+    jnz pm_done ; if occupied, return
+    xor al,al  ; otherwise, draw empty cell
+    jmp draw_sprite
 
 ; All sprites consist of 7 rows of 7 pixels.
 ; The format of each row is 0xXXXXXXXR.  One X bit per column, indicating
