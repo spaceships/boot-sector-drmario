@@ -299,6 +299,21 @@ rng:
     ret
 %endif
 
+; potentially place a virus at di, if there aren't too many already and
+; the virus wins the dice roll
+; -intended to be used with each_cell
+%if enable_virii > 0
+place_virii:
+    cmp byte [bp+num_virii],VIRUS_MAX
+    jae pm_done ; return
+    call rng
+    cmp ah,VIRUS_THRESH
+    jb pm_done ; return
+    inc byte [bp+num_virii]
+    mov si,sprite_virus ; draw virus sprite
+    jmp draw_sprite
+%endif
+
 ; check the column up to 4 below and 4 to the right
 ; changes matches into sprite_clear
 ; -intended to be used with each_cell
@@ -328,21 +343,6 @@ c4_clear:
 c4_done:
     pop di
     ret
-
-; potentially place a virus at di, if there aren't too many already and 
-; the virus wins the dice roll
-; -intended to be used with each_cell
-%if enable_virii > 0
-place_virii:
-    cmp byte [bp+num_virii],VIRUS_MAX
-    jae pm_done ; return
-    call rng
-    cmp ah,VIRUS_THRESH
-    jb pm_done ; return
-    inc byte [bp+num_virii]
-    mov si,sprite_virus ; draw virus sprite
-    jmp draw_sprite
-%endif
 
 ; call a function in ax with di set to start of each cell on the board
 each_cell:
