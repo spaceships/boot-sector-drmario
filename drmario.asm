@@ -128,7 +128,7 @@ gl_check_right:
 
 gl_check_down:
     cmp al,0x50 ; down arrow
-    je gl_fall
+    je pillfall
 
 gl_check_a:
     xor cl,cl ; swap colors when going horiz
@@ -170,17 +170,10 @@ gl_clock:
     ;;;;;;;;;;;;;;;;;;;;;;;;
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
-gl_fall:
-    call pillfall
-    jmp game_loop
-    ;;;;;;;;;;;;;
-    ;; the end ;;
-    ;;;;;;;;;;;;;
-
 pillfall:
     mov ax,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
-    jz pm_done ; reuse pillmove's ret statement
+    jz game_loop
     ; there is something in the way, check for clears
     mov ax,matchcheck
     call each_cell
