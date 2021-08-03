@@ -3,8 +3,6 @@
 ; conditional compilation of features
 %assign enable_virii 1
 %assign enable_rng 1
-%assign enable_clear 1
-%assign enable_singletons 0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
@@ -190,18 +188,6 @@ pillfall:
     ;;;;;;;;;;;;;;;;;;;;;;
     mov ax,matchcheck ; check for a match, change it to sprite_clear
     call each_cell ; run matchcheck on every cell
-%if enable_singletons
-    mov ax,singletons ; convert half pills to singletons
-    call each_cell ; run it on every cell
-%endif
-%if enable_clear
-    test byte [bp+clear_flag],0xFF ; was the clear_flag set?
-    jz pillnew ; if not, continue game
-    call pause ; otherwise, pause
-    mov ax,clearmarked ; clear cells that look like sprite_clear
-    call each_cell ; run clearmarked on every cell
-    mov byte [bp+clear_flag],0 ; reset clear_flag
-%endif
     jmp pillnew ; continue game
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; end of game loop ;;
@@ -370,12 +356,9 @@ c4_done:
 ; intended to be used with each_cell
 remove_cleared:
     test byte [di+CLEAR_PIXEL],0xFF
-    jnz rc_done
-    mov al,0
-    mov si,sprite_clear
-    call draw_sprite
-rc_done:
-    ret
+    jnz pm_done
+    xor al,al
+    jmp draw_sprite
 
 ; call a function in ax with di set to start of each cell on the board
 each_cell:
@@ -395,44 +378,6 @@ ec_inner:
     cmp di,BOARD_START
     ja ec_outer
     ret
-
-; clear all cells which are marked for deletion
-%if enable_clear
-clearmarked:
-    test byte [di+2*320+3],0xFF ; unique 0 pixel in sprite clear
-    jnz pm_done ; if occupied, return
-    xor al,al  ; otherwise, draw empty cell
-    jmp draw_sprite
-%endif
-
-; convert half pills into singletons, assuming di is a clear
-%if enable_singletons
-singletons:
-    mov bx,8 ; test right
-    call single_test
-    neg bx ; test left
-    call single_test
-    mov bx,8*320 ; test below
-    ; call single_test
-    ; neg bx ; test above
-    ; fallthrough to single_test
-
-single_test:
-    mov al,[di+bx]
-    or al,[di+bx+6]
-    or al,[di+bx+7*320]
-    or al,[di+bx+7*320+6]
-    jz pm_done ; single or clear
-    ; TODO: test for virus and border
-    cmp al,BORDER_COLOR
-    je pm_done
-    pusha
-    mov si,sprite_single
-    call draw_sprite
-    popa
-    ret
-    
-%endif
 
 ; All sprites consist of 7 rows of 7 pixels.
 ; The format of each row is 0xXXXXXXXR.  One X bit per column, indicating
