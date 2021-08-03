@@ -1,8 +1,8 @@
     bits 16
 
 ; conditionally compile certain features for space
-%assign enable_virii 1 
-%assign enable_rng 1 
+%assign enable_virii 1
+%assign enable_rng 1
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
@@ -96,15 +96,6 @@ game_loop:
     ;;;;;;;;;;;;;;;;;;;;
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
-    ; preamble, setting up movement
-    mov bx,8
-    mov cx,[bp+pill_offset]
-    test cx,cx ; is pill offset negative? pill vertical?
-    js gl_offset_ok
-    shl bx,1  ; R horizontal, mul bx by 2
-    xor cx,cx ; LR/horiz: only check 1 place
-gl_offset_ok:
-
     ; get the actual key, if it is pressed
     mov ah,0x01 ; bios key available
     int 0x16 ; sets ZF=1 if no keystroke available
@@ -116,14 +107,13 @@ gl_offset_ok:
 gl_check_left:
     cmp al,0x4b ; left arrow
     jne gl_check_right
-    mov ax,-8
-    mov bx,ax
+    mov ax,-8 ; move pill left 8 pixels
     call pillmove
 
 gl_check_right:
     cmp al,0x4d ; right arrow
     jne gl_check_down
-    mov ax,8
+    mov ax,8 ; movepill right 8 pixels
     call pillmove
 
 gl_check_down:
@@ -178,65 +168,54 @@ pillrot:
     jmp gl_clock
 
 pillfall:
-    mov ax,8*320
-    mov bx,ax
-    mov cx,[bp+pill_offset] ; cx will be 8 or -8*320
-    test cx,cx  ; if cx is negative, cancel it out
-    jns pf_call ; because we only have to test 1 loc
-    xor cx,cx   ; when falling with vertical pill
-pf_call:
+    mov ax,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
-    jz pm_done    ; reuse pillmove's ret statement
+    jz pm_done ; reuse pillmove's ret statement
     ; there is something in the way, check for clears
     mov ax,matchcheck
     call each_cell
     ; fall through to pillnew
 
 pillnew:
-    mov bx,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
-    test byte [bx+COMMON_PIXEL],0xFF ; is the space occupied?
-    jnz start                        ; if occupied, restart game
-    mov word [bp+pill_loc],bx
-    mov word [bp+pill_offset],8
-    mov word [bp+pill_sprite],sprite_left
     call rng
     mov cl,al
     call rng
     mov ah,cl
-    mov [bp+pill_color],ax
-    jmp pilldraw
+    mov [bp+pill_color],ax ; set colors
+    mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
+    mov bx,8 ; initial rotation
+    mov word [bp+pill_sprite],sprite_left
+    call pillcheck_no_clear ; don't clear previous pill
+    jnz start ; if occupied, restart game
+    ret
 
-; potentially place a virus at di, if there aren't too many already and 
-; the virus wins the dice roll
-; -intended to be used with each_cell
-%if enable_virii > 0
-place_virii:
-    cmp byte [bp+num_virii],VIRUS_MAX
-    jae pm_done ; return
-    call rng
-    cmp ah,VIRUS_THRESH
-    jb pm_done ; return
-    inc byte [bp+num_virii]
-    mov si,sprite_virus ; draw virus sprite
-    jmp draw_sprite
-%endif
-
-; ax: moving offset
-; bx: checking offset 1
-; cx: checking offset 2 (in addition to bx)
+; ax: proposed moving offset
 pillmove:
-    mov di,[bp+pill_loc]
-    test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz pm_done ; return
-    add bx,cx
-    test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz pm_done ; return
-    push ax
-    call pillclear
-    pop ax
-    add word [bp+pill_loc],ax
-    call pilldraw
-    xor ax,ax ; resets ZF=1 for pillfall
+    mov di,[bp+pill_loc] ; load cur loc
+    add di,ax ; add in proposed offset
+    mov bx,[bp+pill_offset] ; load cur offset
+    ; fall through to pillcheck
+
+; di: proposed loc
+; bx: proposed offset
+; sets ZF=1 if something in the way
+; sets pill_loc=di and pill_offset=bx if possible
+pillcheck:
+    push di
+    call pillclear ; clear pill avoiding interference
+    pop di
+pillcheck_no_clear:
+    test byte [di+COMMON_PIXEL],0xFF ; is it occupied?
+    jnz pm_restore ; if yes, restore pill and return
+    test byte [di+COMMON_PIXEL+bx],0xFF ; what about other part?
+    jnz pm_restore ; if yes, restore pill and return
+    mov [bp+pill_loc],di ; ok we're clear, move pill
+    mov [bp+pill_offset],bx ; write new offset
+    xor ax,ax ; set ZF=1 for pillfall & pillrot
+pm_restore: 
+    pushf
+    call pilldraw ; (re)draw pill
+    popf
 pm_done:
     ret
 
@@ -351,6 +330,21 @@ c4_clear:
 c4_done:
     pop di
     ret
+
+; potentially place a virus at di, if there aren't too many already and 
+; the virus wins the dice roll
+; -intended to be used with each_cell
+%if enable_virii > 0
+place_virii:
+    cmp byte [bp+num_virii],VIRUS_MAX
+    jae pm_done ; return
+    call rng
+    cmp ah,VIRUS_THRESH
+    jb pm_done ; return
+    inc byte [bp+num_virii]
+    mov si,sprite_virus ; draw virus sprite
+    jmp draw_sprite
+%endif
 
 ; call a function in ax with di set to start of each cell on the board
 each_cell:
