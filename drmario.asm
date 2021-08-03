@@ -103,6 +103,7 @@ pillnew:
     ;; initialization done, game loop follows ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 game_loop:
+    mov di,[bp+pill_loc] ; pre-load pill location into di
     ;;;;;;;;;;;;;;;;;;;;
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
@@ -117,13 +118,13 @@ game_loop:
 gl_check_left:
     cmp al,0x4b ; left arrow
     jne gl_check_right
-    mov ax,-8 ; move pill left 8 pixels
+    sub di,8 ; move pill left 8 pixels
     call pillmove
 
 gl_check_right:
     cmp al,0x4d ; right arrow
     jne gl_check_down
-    mov ax,8 ; movepill right 8 pixels
+    add di,8 ; move pill right 8 pixels
     call pillmove
 
 gl_check_down:
@@ -146,7 +147,6 @@ pillrot:
     xor bx,[bp+pill_offset] ; toggle between +8 (horiz) and -8*320 (vert)
     mov dx,((sprite_bottom-start)^(sprite_left-start))
     xor dx,[bp+pill_sprite] ; toggle between sprite_left and sprite_bottom
-    mov di,[bp+pill_loc]
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz gl_clock ; no rotate, return
     call pillclear
@@ -171,7 +171,7 @@ gl_clock:
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
 pillfall:
-    mov ax,8*320 ; move down 1 row
+    add di,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
     jz game_loop
     ; there is something in the way, check for clears
@@ -179,10 +179,8 @@ pillfall:
     call each_cell
     jmp pillnew
 
-; ax: proposed moving offset
+; di: proposed location
 pillmove:
-    mov di,[bp+pill_loc] ; load cur loc
-    add di,ax ; add in proposed offset
     mov bx,[bp+pill_offset] ; load cur offset
     ; fall through to pillcheck
 
@@ -207,6 +205,7 @@ pm_restore:
 pm_done:
     ret
 
+; di: top left pixel
 ; clobbers ax,si,di
 pillclear:
     xor ax,ax
