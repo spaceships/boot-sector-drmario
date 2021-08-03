@@ -87,7 +87,17 @@ db_black:
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make a new pill ;;
     ;;;;;;;;;;;;;;;;;;;;;
-    call pillnew
+pillnew:
+    call rng
+    mov cl,al
+    call rng
+    mov ah,cl
+    mov [bp+pill_color],ax ; set colors
+    mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
+    mov bx,8 ; initial rotation
+    mov word [bp+pill_sprite],sprite_left
+    call pillcheck_no_clear ; don't clear previous pill
+    jnz start ; if occupied, restart game
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; initialization done, game loop follows ;;
@@ -174,20 +184,7 @@ pillfall:
     ; there is something in the way, check for clears
     mov ax,matchcheck
     call each_cell
-    ; fall through to pillnew
-
-pillnew:
-    call rng
-    mov cl,al
-    call rng
-    mov ah,cl
-    mov [bp+pill_color],ax ; set colors
-    mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
-    mov bx,8 ; initial rotation
-    mov word [bp+pill_sprite],sprite_left
-    call pillcheck_no_clear ; don't clear previous pill
-    jnz start ; if occupied, restart game
-    ret
+    jmp pillnew
 
 ; ax: proposed moving offset
 pillmove:
