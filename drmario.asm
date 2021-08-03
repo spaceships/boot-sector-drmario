@@ -14,7 +14,7 @@ PILL_YELLOW:    equ 0x2c
 PILL_BLUE:      equ 0x36
 BORDER_COLOR:   equ 0x6b
 SPEED:          equ 4 ; higher = slower
-PAUSE_LEN:      equ 10 ; higher = slower
+PAUSE_LEN:      equ 3 ; pause = 131*x ms
 VIRUS_THRESH:   equ 220 ; closer to 255 => less frequent
 VIRUS_MAX:      equ 8 ; max num virii
 NUM_ROWS:       equ 16 ; Original: 16
@@ -200,14 +200,9 @@ pillfall:
     ;;;;;;;;;;;;;;;;;;;;;;
 
 pause:
-    mov ah,0x00
-    int 0x1a ; bios clock read
-    mov bx,dx ; save result
-    add bx,PAUSE_LEN
-p_loop:
-    int 0x1a ; bios clock read
-    cmp bx,dx
-    jne p_loop
+    mov cx,PAUSE_LEN
+    mov ah,0x86
+    int 0x15 ; bios wait function - cx:dx = interval in us
     ret
 
 ; di: proposed location
