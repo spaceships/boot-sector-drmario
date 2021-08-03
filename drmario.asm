@@ -205,9 +205,8 @@ pillcheck:
     call pillclear ; clear pill avoiding interference
     pop di
 pillcheck_no_clear:
-    test byte [di+COMMON_PIXEL],0xFF ; is it occupied?
-    jnz pm_restore ; if yes, restore pill and return
-    test byte [di+COMMON_PIXEL+bx],0xFF ; what about other part?
+    mov al,[di+COMMON_PIXEL]
+    or al,[di+COMMON_PIXEL+bx] ; is either cell occupied?
     jnz pm_restore ; if yes, restore pill and return
     mov [bp+pill_loc],di ; ok we're clear, move pill
     mov [bp+pill_offset],bx ; write new offset
