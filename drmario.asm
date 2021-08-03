@@ -42,6 +42,7 @@ pill_sprite:    equ pill_offset + 2     ; [word]
 next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
+direction:      equ num_virii + 1       ; [array]
 
 start:
     mov bp,base   ; set base address for global state
@@ -191,12 +192,6 @@ pillfall:
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; end of game loop ;;
     ;;;;;;;;;;;;;;;;;;;;;;
-
-pause:
-    mov cx,PAUSE_LEN
-    mov ah,0x86
-    int 0x15 ; bios wait function - cx:dx = interval in us
-    ret
 
 ; di: proposed location
 ; sets ZF=1 if nothing is in the way
