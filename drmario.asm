@@ -198,7 +198,7 @@ pillmove:
 
 ; di: proposed loc
 ; bx: proposed offset
-; sets ZF=1 if something in the way
+; sets ZF=1 if nothing is in the way
 ; sets pill_loc=di and pill_offset=bx if possible
 pillcheck:
     push di
@@ -210,8 +210,7 @@ pillcheck_no_clear:
     jnz pm_restore ; if yes, restore pill and return
     mov [bp+pill_loc],di ; ok we're clear, move pill
     mov [bp+pill_offset],bx ; write new offset
-    xor ax,ax ; set ZF=1 for pillfall & pillrot
-pm_restore: 
+pm_restore:
     pushf
     call pilldraw ; (re)draw pill
     popf
