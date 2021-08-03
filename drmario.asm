@@ -42,7 +42,6 @@ pill_sprite:    equ pill_offset + 2     ; [word]
 next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
-clear_flag:     equ num_virii + 1       ; [byte]
 
 start:
     mov bp,base   ; set base address for global state
@@ -346,7 +345,6 @@ c4_clear:
     call draw_sprite ; al is set from above
     sub di,bx ; subtract offset
     loop c4_clear
-    inc byte [bp+clear_flag] ; set global clear flag
 c4_done:
     pop di
     ret
