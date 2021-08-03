@@ -31,6 +31,7 @@ BOARD_WIDTH:  equ CELL_SIZE*NUM_COLS
 BOARD_START:  equ (100-BOARD_HEIGHT/2)*320+(160-BOARD_WIDTH/2)
 BOARD_END:    equ (100+BOARD_HEIGHT/2)*320+(160+BOARD_WIDTH/2)
 COMMON_PIXEL: equ 5
+CLEAR_PIXEL:  equ 643 ; 2 pixels down, 3 right
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; game variables ;;
@@ -170,6 +171,13 @@ gl_clock:
     jb game_loop
     add dx,SPEED
     mov [bp+next_tick],dx
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; remove cleared pills ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;
+    push di
+    mov ax,remove_cleared
+    call each_cell
+    pop di
     ;;;;;;;;;;;;;;;;;;;;;;;;
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -355,6 +363,18 @@ c4_clear:
     inc byte [bp+clear_flag] ; set global clear flag
 c4_done:
     pop di
+    ret
+
+; remove any cleared pill piece in the cell
+; di: top left corner
+; intended to be used with each_cell
+remove_cleared:
+    test byte [di+CLEAR_PIXEL],0xFF
+    jnz rc_done
+    mov al,0
+    mov si,sprite_clear
+    call draw_sprite
+rc_done:
     ret
 
 ; call a function in ax with di set to start of each cell on the board
