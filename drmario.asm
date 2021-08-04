@@ -3,6 +3,7 @@
 ; conditional compilation of features
 %assign enable_virii 1
 %assign enable_rng 1
+%assign enable_fallstuff 0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
@@ -30,6 +31,7 @@ BOARD_START:  equ (100-BOARD_HEIGHT/2)*320+(160-BOARD_WIDTH/2)
 BOARD_END:    equ (100+BOARD_HEIGHT/2)*320+(160+BOARD_WIDTH/2)
 COMMON_PIXEL: equ 5
 CLEAR_PIXEL:  equ 643 ; 2 pixels down, 3 right
+VIRUS_PIXEL:  equ 3*320+3
 
 RIGHT: equ 0b0001
 UP:    equ 0b0010
@@ -49,6 +51,8 @@ pill_sprite:    equ pill_offset + 2     ; [word]
 next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
+stuff_marked:   equ num_virii + 1       ; [byte]
+stuff_fell:     equ stuff_marked + 1    ; [byte]
 
 start:
     mov bp,base   ; set base address for global state
@@ -175,29 +179,56 @@ gl_clock:
     jb game_loop
     add dx,SPEED
     mov [bp+next_tick],dx
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;
-    ;; remove cleared pills ;;
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;
-    push di
-    mov ax,remove_cleared
-    call each_cell
-    pop di
     ;;;;;;;;;;;;;;;;;;;;;;;;
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
 pillfall:
+    mov di,[bp+pill_loc] ; load pill location into di
     add di,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
     jz game_loop ; no obstructions, continue game loop
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; check for clears ;;
     ;;;;;;;;;;;;;;;;;;;;;;
-    mov ax,matchcheck ; check for a match, change it to sprite_clear
+clearcheck:
+    mov ax,matchcheck ; check for a match, change it to clear
     call each_cell ; run matchcheck on every cell
-    jmp pillnew ; continue game
+    xor al,al
+    xchg al,[bp+stuff_marked] ; get and clear stuff_marked
+    cmp al,0
+    je cc_nopause1 ; if something was marked, wait a bit
+    call pause
+cc_nopause1:
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; remove cleared pills ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;
+    mov ax,remove_cleared
+    call each_cell
+    ;;;;;;;;;;;;;;;;;;;;;
+    ;; make stuff fall ;;
+    ;;;;;;;;;;;;;;;;;;;;;
+%if enable_fallstuff
+    mov ax,fall_stuff
+    call each_cell
+    xor al,al
+    xchg al,[bp+stuff_fell] ; get and clear stuff_fell
+    cmp al,0
+    je pillnew ; nothing fell, continue game
+    call pause ; wait, then...
+    jmp clearcheck ; ... keep running this phase
+%else
+    jmp pillnew
+%endif
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; end of game loop ;;
     ;;;;;;;;;;;;;;;;;;;;;;
+
+; pause for a bit
+pause:
+    mov cx,4
+    mov ah,0x86
+    int 0x15
+    ret
 
 ; di: proposed location
 ; sets ZF=1 if nothing is in the way
@@ -346,6 +377,7 @@ c4_clear:
     call draw_sprite ; al is set from above
     sub di,bx ; subtract offset
     loop c4_clear
+    inc byte [bp+stuff_marked]
 c4_done:
     pop di
     ret
@@ -358,6 +390,32 @@ remove_cleared:
     jnz pm_done
     xor al,al
     jmp draw_sprite
+
+; make pieces fall that can fall
+%if enable_fallstuff
+fall_stuff:
+    test byte [di+VIRUS_PIXEL],0xFF
+    jz pm_done ; it's a virus, return
+    test byte [di+8*320+COMMON_PIXEL],0xFF
+    jnz pm_done ; something is below, return
+    inc byte [bp+stuff_fell] ; set stuff fell flag
+    ; move cell down using xchg
+    mov si,di ; set source
+    add di,8*320 ; set target to be row below
+    mov cx,8
+fs_outer:
+    mov bx,8 
+fs_inner:
+    xor al,al ; set al=0
+    xchg al,[si+bx] ; xchg the source one, setting it to 0
+    xchg al,[di+bx] ; move it to the target one
+    dec bx
+    jnz fs_inner
+    add di,320 ; increment di to next row of pixels
+    add si,320 ; increment si to next row of pixels
+    loop fs_outer
+    ret
+%endif
 
 ; call a function in ax with di set to start of each cell on the board
 each_cell:
