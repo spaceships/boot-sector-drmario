@@ -31,6 +31,13 @@ BOARD_END:    equ (100+BOARD_HEIGHT/2)*320+(160+BOARD_WIDTH/2)
 COMMON_PIXEL: equ 5
 CLEAR_PIXEL:  equ 643 ; 2 pixels down, 3 right
 
+RIGHT: equ 0b0001
+UP:    equ 0b0010
+LEFT:  equ 0b0100
+DOWN:  equ 0b1000
+HORIZ: equ 0b00010100
+VERT:  equ 0b00101000
+
 ;;;;;;;;;;;;;;;;;;;;
 ;; game variables ;;
 ;;;;;;;;;;;;;;;;;;;;
@@ -42,7 +49,6 @@ pill_sprite:    equ pill_offset + 2     ; [word]
 next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
-direction:      equ num_virii + 1       ; [array]
 
 start:
     mov bp,base   ; set base address for global state
@@ -55,6 +61,9 @@ start:
     mov ax,0xa000 ; set data & extra segments to video
     mov ds,ax
     mov es,ax
+    
+    mov ax,0x1234
+    mov fs,ax
 
     ;;;;;;;;;;;;;;;;;
     ;; draw border ;;
@@ -183,6 +192,18 @@ pillfall:
     add di,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
     jz game_loop ; no obstructions, continue game loop
+    ;;;;;;;;;;;;;;;;;;;;;
+    ;; write direction ;;
+    ;;;;;;;;;;;;;;;;;;;;;
+    mov di,[bp+pill_loc]
+    mov bx,[bp+pill_offset]
+    mov ax,HORIZ
+    test bx,bx
+    jns pf_vert
+    mov al,VERT
+pf_vert:
+    fs mov [di],ah
+    fs mov [di+bx],al
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; check for clears ;;
     ;;;;;;;;;;;;;;;;;;;;;;
