@@ -62,9 +62,6 @@ start:
     mov ds,ax
     mov es,ax
     
-    mov ax,0x1234
-    mov fs,ax
-
     ;;;;;;;;;;;;;;;;;
     ;; draw border ;;
     ;;;;;;;;;;;;;;;;;
@@ -192,18 +189,6 @@ pillfall:
     add di,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
     jz game_loop ; no obstructions, continue game loop
-    ;;;;;;;;;;;;;;;;;;;;;
-    ;; write direction ;;
-    ;;;;;;;;;;;;;;;;;;;;;
-    mov di,[bp+pill_loc]
-    mov bx,[bp+pill_offset]
-    mov ax,HORIZ
-    test bx,bx
-    jns pf_vert
-    mov al,VERT
-pf_vert:
-    fs mov [di],ah
-    fs mov [di+bx],al
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; check for clears ;;
     ;;;;;;;;;;;;;;;;;;;;;;
