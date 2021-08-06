@@ -93,7 +93,7 @@ db_black:
     ; otherwise, no virii appear.
 %if enable_virii
     mov byte [bp+num_virii],al ; reuse al=0 from above
-    mov ax,place_virii
+    mov bx,place_virii
     call each_cell
 %endif
 
@@ -158,13 +158,12 @@ gl_check_s:
 gl_rotate_pill:
     mov bx,8^(-8*320)
     xor bx,[bp+pill_offset] ; toggle between +8 (horiz) and -8*320 (vert)
-    mov dx,((sprite_bottom-start)^(sprite_left-start))
-    xor dx,[bp+pill_sprite] ; toggle between sprite_left and sprite_bottom
     test byte [di+COMMON_PIXEL+bx],0xFF
     jnz gl_clock ; no rotate
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
-    mov [bp+pill_sprite],dx ; actually change sprite
+    mov dx,((sprite_bottom-start)^(sprite_left-start))
+    xor [bp+pill_sprite],dx ; swap sprite
     xor cl,bl               ; set 8 or 0 depending on orientation
     ror word [bp+pill_color],cl ; possibly swap colors
     call pilldraw
@@ -183,7 +182,6 @@ gl_clock:
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
 pillfall:
-    mov di,[bp+pill_loc] ; load pill location into di
     add di,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
     jz game_loop ; no obstructions, continue game loop
@@ -191,7 +189,7 @@ pillfall:
     ;; check for clears ;;
     ;;;;;;;;;;;;;;;;;;;;;;
 clearcheck:
-    mov ax,matchcheck ; check for a match, change it to clear
+    mov bx,matchcheck ; check for a match, change it to clear
     call each_cell ; run matchcheck on every cell
     xor al,al
     xchg al,[bp+stuff_marked] ; get and clear stuff_marked
@@ -202,15 +200,15 @@ cc_nopause1:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; remove cleared pills ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
-    mov ax,remove_cleared
+    mov bx,remove_cleared
     call each_cell
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make stuff fall ;;
     ;;;;;;;;;;;;;;;;;;;;;
 %if enable_fallstuff
-    mov ax,fall_stuff
+    mov bx,fall_stuff
     call each_cell
-    xor al,al
+    mov al,0
     xchg al,[bp+stuff_fell] ; get and clear stuff_fell
     cmp al,0
     je pillnew ; nothing fell, continue game
@@ -406,18 +404,17 @@ fall_stuff:
 fs_outer:
     mov bx,8 
 fs_inner:
-    xor al,al ; set al=0
-    xchg al,[si+bx] ; xchg the source one, setting it to 0
-    xchg al,[di+bx] ; move it to the target one
+    movsb ; [di++] = [si++]
+    mov byte [si-1],0 ; [si-1] = 0
     dec bx
     jnz fs_inner
-    add di,320 ; increment di to next row of pixels
+    add di,312 ; increment di to next row of pixels
     add si,320 ; increment si to next row of pixels
     loop fs_outer
     ret
 %endif
 
-; call a function in ax with di set to start of each cell on the board
+; call a function in bx with di set to start of each cell on the board
 each_cell:
     ; start at bottom right cell and work back.
     ; this is for place_virii so it can place most of them at the bottom.
@@ -426,7 +423,7 @@ ec_outer:
     mov cx,NUM_COLS
 ec_inner:
     pusha
-    call ax
+    call bx
     popa
     sub di,CELL_SIZE
     loop ec_inner
