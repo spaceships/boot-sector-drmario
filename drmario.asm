@@ -40,8 +40,7 @@ base:           equ 0xfc80
 pill_loc:       equ 0                   ; [word]
 pill_color:     equ pill_loc + 2        ; [word]
 pill_offset:    equ pill_color + 2      ; [word]
-pill_sprite:    equ pill_offset + 2     ; [word]
-next_tick:      equ pill_sprite + 2     ; [word]
+next_tick:      equ pill_offset + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
 wait_flag:      equ num_virii + 1       ; [byte]
@@ -100,7 +99,6 @@ pillnew:
     mov [bp+pill_color],ax ; set colors
     mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
     mov bx,8 ; initial rotation
-    mov word [bp+pill_sprite],sprite_left
     call pillmove_no_clear ; don't clear previous pill
     jnz start ; if occupied, restart game
 
@@ -154,8 +152,6 @@ gl_rotate_pill:
     jnz gl_clock ; no rotate
     call pillclear
     mov [bp+pill_offset],bx ; actually change offset
-    mov dx,((sprite_bottom-start)^(sprite_left-start))
-    xor [bp+pill_sprite],dx ; swap sprite
     xor cl,bl               ; set 8 or 0 depending on orientation
     ror word [bp+pill_color],cl ; possibly swap colors
     call pilldraw
@@ -253,11 +249,16 @@ pilldraw:
     mov ax,[bp+pill_color]
 pd_common:
     mov di,[bp+pill_loc]
-    mov si,[bp+pill_sprite]
+    mov si,sprite_bottom
+    mov bx,[bp+pill_offset]
+    test bx,bx
+    js pd_bottom
+    add si,10 ; horizontal: move si ahead to sprite_left
+pd_bottom:
     call draw_sprite
     ; `draw_sprite` leaves `si` set to the start of the next sprite
     mov al,ah
-    add di,[bp+pill_offset]
+    add di,bx
     ; fall through to draw_sprite
 
 ; di: top left pixel
