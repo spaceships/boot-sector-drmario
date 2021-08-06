@@ -33,13 +33,6 @@ COMMON_PIXEL: equ 5
 CLEAR_PIXEL:  equ 643 ; 2 pixels down, 3 right
 VIRUS_PIXEL:  equ 3*320+3
 
-RIGHT: equ 0b0001
-UP:    equ 0b0010
-LEFT:  equ 0b0100
-DOWN:  equ 0b1000
-HORIZ: equ 0b00010100
-VERT:  equ 0b00101000
-
 ;;;;;;;;;;;;;;;;;;;;
 ;; game variables ;;
 ;;;;;;;;;;;;;;;;;;;;
@@ -51,8 +44,7 @@ pill_sprite:    equ pill_offset + 2     ; [word]
 next_tick:      equ pill_sprite + 2     ; [word]
 rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
-stuff_marked:   equ num_virii + 1       ; [byte]
-stuff_fell:     equ stuff_marked + 1    ; [byte]
+wait_flag:      equ num_virii + 1       ; [byte]
 
 start:
     mov bp,base   ; set base address for global state
@@ -191,11 +183,8 @@ pillfall:
 clearcheck:
     mov bx,matchcheck ; check for a match, change it to clear
     call each_cell ; run matchcheck on every cell
-    xor al,al
-    xchg al,[bp+stuff_marked] ; get and clear stuff_marked
-    cmp al,0
-    je cc_nopause1 ; if something was marked, wait a bit
-    call pause
+    mov bx,cc_nopause1 
+    call pause ; if pills cleared, pause
 cc_nopause1:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; remove cleared pills ;;
@@ -208,10 +197,7 @@ cc_nopause1:
 %if enable_fallstuff
     mov bx,fall_stuff
     call each_cell
-    mov al,0
-    xchg al,[bp+stuff_fell] ; get and clear stuff_fell
-    cmp al,0
-    je pillnew ; nothing fell, continue game
+    mov bx,pillnew ; if nothing fell, continue game
     call pause ; wait, then...
     jmp clearcheck ; ... keep running this phase
 %else
@@ -221,8 +207,15 @@ cc_nopause1:
     ;; end of game loop ;;
     ;;;;;;;;;;;;;;;;;;;;;;
 
-; pause for a bit
+; pause for a bit if flag set, otherwise jump to bx
 pause:
+    mov al,0
+    xchg al,[bp+wait_flag] ; clear and get wait_flag
+    cmp al,0 ; check if it is set
+    jne p_wait ; if it is set, wait
+    push bx ; otherwise, return to the address in bx
+    ret
+p_wait:
     mov cx,4
     mov ah,0x86
     int 0x15
@@ -375,7 +368,7 @@ c4_clear:
     call draw_sprite ; al is set from above
     sub di,bx ; subtract offset
     loop c4_clear
-    inc byte [bp+stuff_marked]
+    inc byte [bp+wait_flag] ; set wait flag
 c4_done:
     pop di
     ret
@@ -392,12 +385,12 @@ remove_cleared:
 ; make pieces fall that can fall
 %if enable_fallstuff
 fall_stuff:
+    add di,VIRUS_PIXEL
     test byte [di+VIRUS_PIXEL],0xFF
     jz pm_done ; it's a virus, return
     test byte [di+8*320+COMMON_PIXEL],0xFF
     jnz pm_done ; something is below, return
-    inc byte [bp+stuff_fell] ; set stuff fell flag
-    ; move cell down using xchg
+    inc byte [bp+wait_flag] ; set wait flag
     mov si,di ; set source
     add di,8*320 ; set target to be row below
     mov cx,8
