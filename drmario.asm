@@ -205,14 +205,12 @@ cc_nopause1:
 
 ; pause for a bit if flag set, otherwise jump to bx
 pause:
-    mov al,0
-    xchg al,[bp+wait_flag] ; clear and get wait_flag
-    cmp al,0 ; check if it is set
-    jne p_wait ; if it is set, wait
+    shr byte [bp+wait_flag],1
+    jc p_wait ; if it is set, wait
     push bx ; otherwise, return to the address in bx
     ret
 p_wait:
-    mov cx,4
+    mov cx,PAUSE_LEN
     mov ah,0x86
     int 0x15
     ret
@@ -369,7 +367,7 @@ c4_clear:
     call draw_sprite ; al is set from above
     sub di,bx ; subtract offset
     loop c4_clear
-    inc byte [bp+wait_flag] ; set wait flag
+    mov byte [bp+wait_flag],1 ; set wait flag
 c4_done:
     pop di
     ret
@@ -391,7 +389,7 @@ fall_stuff:
     jz pm_done ; it's a virus, return
     test byte [di+8*320+COMMON_PIXEL],0xFF
     jnz pm_done ; something is below, return
-    inc byte [bp+wait_flag] ; set wait flag
+    mov byte [bp+wait_flag],1 ; set wait flag
     mov si,di ; set source
     add di,8*320 ; set target to be row below
     mov cx,8
