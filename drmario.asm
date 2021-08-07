@@ -22,9 +22,9 @@ NUM_COLS:       equ 8 ; Original: 8
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; fixed parameters ;;
 ;;;;;;;;;;;;;;;;;;;;;;
-CELL_SIZE:    equ 8             ; size of square board cells in pixels
-SPRITE_ROWS:  equ 7             ; vertical size of sprite in pixels
-SPRITE_COLS:  equ 7             ; horizontal size of sprite in pixels
+CELL_SIZE:    equ 8 ; size of square board cells in pixels
+SPRITE_ROWS:  equ 7 ; vertical size of sprite in pixels
+SPRITE_COLS:  equ 7 ; horizontal size of sprite in pixels
 BOARD_HEIGHT: equ CELL_SIZE*NUM_ROWS
 BOARD_WIDTH:  equ CELL_SIZE*NUM_COLS
 BOARD_START:  equ (100-BOARD_HEIGHT/2)*320+(160-BOARD_WIDTH/2)
@@ -79,11 +79,8 @@ db_black:
     ;;;;;;;;;;;;;;;;;
     ;; place virii ;;
     ;;;;;;;;;;;;;;;;;
-    ; initialize num_virii 
-    ; this is needed when you have multiple runs, like at game over. 
-    ; otherwise, no virii appear.
 %if enable_virii
-    mov byte [bp+num_virii],al ; reuse al=0 from above
+    mov byte [bp+num_virii],VIRUS_MAX
     mov bx,place_virii
     call each_cell
 %endif
@@ -205,7 +202,7 @@ cc_nopause1:
 
 ; pause for a bit if flag set, otherwise jump to bx
 pause:
-    shr byte [bp+wait_flag],1
+    shr byte [bp+wait_flag],1 ; check & clear wait_flag
     jc p_wait ; if it is set, wait
     push bx ; otherwise, return to the address in bx
     ret
@@ -237,26 +234,26 @@ pm_done:
     ret
 
 ; di: top left pixel
-; clobbers ax,si,di
+; clobbers ax,dx,si,di
 pillclear:
-    xor ax,ax
+    xor ax,ax ; set color to none
     jmp pd_common
 
-; clobbers ax,si,di
+; clobbers ax,dx,si,di
 pilldraw:
     mov ax,[bp+pill_color]
 pd_common:
     mov di,[bp+pill_loc]
     mov si,sprite_bottom
-    mov bx,[bp+pill_offset]
-    test bx,bx
+    mov dx,[bp+pill_offset]
+    test dx,dx
     js pd_bottom
     add si,10 ; horizontal: move si ahead to sprite_left
 pd_bottom:
     call draw_sprite
     ; `draw_sprite` leaves `si` set to the start of the next sprite
-    mov al,ah
-    add di,bx
+    mov al,ah ; swap colors
+    add di,dx
     ; fall through to draw_sprite
 
 ; di: top left pixel
@@ -329,12 +326,11 @@ rng:
 ; -intended to be used with each_cell
 %if enable_virii
 place_virii:
-    cmp byte [bp+num_virii],VIRUS_MAX
-    jae pm_done ; return
     call rng
     cmp ah,VIRUS_THRESH
     jb pm_done ; return
-    inc byte [bp+num_virii]
+    dec byte [bp+num_virii]
+    js pm_done ; return
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
 %endif
