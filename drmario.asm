@@ -3,7 +3,7 @@
 ; conditional compilation of features
 %assign enable_virii 1
 %assign enable_rng 1
-%assign enable_fallstuff 0
+%assign enable_fallstuff 1
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
@@ -46,6 +46,9 @@ num_virii:      equ rand + 2            ; [byte]
 wait_flag:      equ num_virii + 1       ; [byte]
 
 start:
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; initialization: 20 bytes ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     mov bp,base   ; set base address for global state
     mov ax,0x0013 ; set video mode vga 320x200x256
     int 0x10      ; call bios interrupt
@@ -57,9 +60,9 @@ start:
     mov ds,ax
     mov es,ax
     
-    ;;;;;;;;;;;;;;;;;
-    ;; draw border ;;
-    ;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; draw border: 29 bytes ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ; draw colored part
     mov al,BORDER_COLOR
     mov cx,320*200
@@ -76,24 +79,23 @@ db_black:
     dec dx
     jnz db_black
 
-    ;;;;;;;;;;;;;;;;;
-    ;; place virii ;;
-    ;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; place virii: 29 bytes ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 %if enable_virii
     mov byte [bp+num_virii],VIRUS_MAX
     mov bx,place_virii
     call each_cell
 %endif
 
-    ;;;;;;;;;;;;;;;;;;;;;
-    ;; make a new pill ;;
-    ;;;;;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; make a new pill: 26 bytes ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 pillnew:
+    call rng ; al = color, ah = rand (3b)
+    mov byte [bp+pill_color],al ; set first color
     call rng
-    mov cl,al
-    call rng
-    mov ah,cl
-    mov [bp+pill_color],ax ; set colors
+    mov byte [bp+pill_color+1],al ; set second color
     mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
     mov bx,8 ; pillmove_no_clear needs bx set already
     mov [bp+pill_offset],bx ; initial rotation
@@ -104,14 +106,14 @@ pillnew:
     ;; initialization done, game loop follows ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 game_loop:
-    mov di,[bp+pill_loc] ; pre-load pill location into di
+    mov di,[bp+pill_loc] ; pre-load pill location into di (3b)
     ;;;;;;;;;;;;;;;;;;;;
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
     ; get the actual key, if it is pressed
-    mov ah,0x01 ; bios key available
-    int 0x16 ; sets ZF=1 if no keystroke available
-    je gl_check_left
+    mov ah,0x01 ; bios key available (2b)
+    int 0x16 ; sets ZF=1 if no keystroke available (2b)
+    je gl_check_left ; (2b)
     mov ah,0x00 ; bios get keystroke
     int 0x16    ; ah=key scan code
     mov al,ah   ; move to al since cmp al,x is 1 byte cheaper
@@ -217,7 +219,7 @@ pause:
 ; sets pill_loc=di and pill_offset=bx if possible
 pillmove:
     push di
-    call pillclear ; clear current pill avoiding interference, sets bx
+    call pillclear ; clear current pill, sets bx=offset
     pop di
 pillmove_no_clear:
     mov al,[di+COMMON_PIXEL]
@@ -290,34 +292,6 @@ ds_end:
     mov [bp+2],si
     popa
     ret
-
-; put a random color from colors array into al
-; put a random byte into ah
-rng:
-%if enable_rng
-    ; This implements an LFSR with two taps: the sequence of bits satisfies
-    ; the recurrence R(n) = R(n-7) + R(n-15).
-    ; As x^15 + x^7 + 1 is a primitive polynomial in GF(2), this sequence
-    ; attains the maximal period of 2^15-1 = 32767.
-    ; Each call to this routine advances the LFSR by 7 bits, shifting in
-    ; new bits on the left.
-    mov ax,[bp+rand]
-    mov bx,ax
-    xor bl,bh
-    shr ax,7
-    mov ah,bl
-    mov [bp+rand],ax ; save new seed
-    ; ah is set: set al to be a random color from the colors array
-    and al,3 ; mask off bottom 2 bits of al
-    jz rng   ; make sure at least one bit is set
-    mov bx,colors-1
-    cs xlat  ; al = [colors + al]
-    ret
-%else
-    mov ah,0xFF
-    mov al,PILL_BLUE
-    ret
-%endif
 
 ; potentially place a virus at di, if there aren't too many already and
 ; the virus wins the dice roll
@@ -417,6 +391,34 @@ ec_inner:
     cmp di,BOARD_START
     ja ec_outer
     ret
+
+; put a random color from colors array into al
+; put a random byte into ah
+rng:
+%if enable_rng
+    ; This implements an LFSR with two taps: the sequence of bits satisfies
+    ; the recurrence R(n) = R(n-7) + R(n-15).
+    ; As x^15 + x^7 + 1 is a primitive polynomial in GF(2), this sequence
+    ; attains the maximal period of 2^15-1 = 32767.
+    ; Each call to this routine advances the LFSR by 7 bits, shifting in
+    ; new bits on the left.
+    mov ax,[bp+rand]
+    mov bx,ax
+    xor bl,bh
+    shr ax,7
+    mov ah,bl
+    mov [bp+rand],ax ; save new seed
+    ; ah is set: set al to be a random color from the colors array
+    and al,3 ; mask off bottom 2 bits of al
+    jz rng   ; make sure at least one bit is set
+    mov bx,colors-1
+    cs xlat  ; al = [colors + al]
+    ret
+%else
+    mov ah,0xFF
+    mov al,PILL_BLUE
+    ret
+%endif
 
 ; All sprites consist of 7 rows of 7 pixels.
 ; The format of each row is 0xXXXXXXXR.  One X bit per column, indicating
