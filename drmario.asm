@@ -3,7 +3,7 @@
 ; conditional compilation of features
 %assign enable_virii 1
 %assign enable_rng 1
-%assign enable_fallstuff 1
+%assign enable_fallstuff 0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
@@ -261,35 +261,36 @@ pd_bottom:
 ; al: color
 draw_sprite:
     pusha
-    mov ah,al
+    mov ah,al ; save color in ah
     mov dx,SPRITE_ROWS
 ds_row:
-    cs lodsb  ; load byte of the sprite into al, advance si
+    cs lodsb ; load byte of the sprite into al, advance si
     mov bl,al ; save it in bl
 ds_row_again:
-    mov cx,SPRITE_COLS  ; ds_col row runs 7 times
+    mov cx,SPRITE_COLS ; ds_col row runs 7 times
 ds_col:
-    xor al,al
-    rol bl,1
+    xor al,al ; set al = 0 = black
+    rol bl,1 ; rotate bl left by 1, sets CF
     jnc ds_print ; if we just shifted off a 0, print black pixel
-    mov al,ah    ; otherwise get the color
+    mov al,ah ; otherwise get the color
 ds_print:
-    stosb        ; print color to current pixel loc
+    stosb ; [di++] = al, print color to current pixel loc
     loop ds_col
-    add di,320-7   ; increment di: +1 row, -8 cols
+    add di,320-7 ; increment di: +1 row, -8 cols
     ; The `ds_col` loop has run 7 times, rotating the original `bl` from
     ; `0xXXXXXXXR` 7 places to produce `0xRXXXXXXX`.  Shifting by 1 more bit
     ; copies R into the carry flag and sets `bl` to `0xXXXXXXX0`, so we'll draw
     ; the same row (if R is set) but won't repeat again afterward.
-    shl bl,1
-    dec dx       ; decrement row counter, preserving the carry flag
-    jc ds_row_again
-    jnz ds_row
+    shl bl,1 ; shift sprite row over by 1, setting CF, zeroing repeat bit
+    dec dx ; decrement row counter, preserving the carry flag
+    jc ds_row_again ; if the last bit of bl was 1, do the row again
+    jnz ds_row ; if dx!=0, do another row
 ds_end:
     ; Preserve the final `si`, leaving it set to the start of the next sprite.
     ; `pilldraw` uses this to draw the second half of the two-part pill.
     mov bp,sp
     mov [bp+2],si
+ds_ret:
     popa
     ret
 
@@ -302,7 +303,7 @@ place_virii:
     cmp ah,VIRUS_THRESH
     jb pm_done ; return
     dec byte [bp+num_virii]
-    js pm_done ; return
+    js pm_done ; return if num_virii is underflowing
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
 %endif
@@ -338,6 +339,7 @@ c4_clear:
     mov byte [bp+wait_flag],1 ; set wait flag
 c4_done:
     pop di
+c4_ret:
     ret
 
 ; remove any cleared pill piece in the cell
@@ -345,17 +347,17 @@ c4_done:
 ; intended to be used with each_cell
 remove_cleared:
     test byte [di+CLEAR_PIXEL],0xFF
-    jnz pm_done
+    jnz c4_ret ; near jump to return statement (2b)
     xor al,al
     jmp draw_sprite
 
 ; make pieces fall that can fall
 %if enable_fallstuff
 fall_stuff:
-    mov al,[di+8*320+COMMON_PIXEL] ; below
-    not al
-    or al,[di+VIRUS_PIXEL]
-    jnz pm_done ; it's a virus, or something is below, return
+    cmp byte [di+VIRUS_PIXEL],0 ; virii don't have pixel set here
+    je c4_ret ; if it is 0, then its a virus, don't make it fall
+    cmp byte [di+8*320+COMMON_PIXEL],0 ; is there seomthing below?
+    jnz c4_ret ; if it is not zero, there is something there
     mov byte [bp+wait_flag],1 ; set wait flag
     mov si,di ; set source
     add di,8*320 ; set target to be row below
