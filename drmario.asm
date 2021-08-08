@@ -95,7 +95,8 @@ pillnew:
     mov ah,cl
     mov [bp+pill_color],ax ; set colors
     mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
-    mov bx,8 ; initial rotation
+    mov bx,8 ; pillmove_no_clear needs bx set already
+    mov [bp+pill_offset],bx ; initial rotation
     call pillmove_no_clear ; don't clear previous pill
     jnz start ; if occupied, restart game
 
@@ -143,14 +144,15 @@ gl_check_s:
 
 ; cl = 0 for rotate left, 8 for rotate right
 gl_rotate_pill:
+    call pillclear
     mov bx,8^(-8*320)
     xor bx,[bp+pill_offset] ; toggle between +8 (horiz) and -8*320 (vert)
-    test byte [di+COMMON_PIXEL+bx],0xFF
-    jnz gl_clock ; no rotate
-    call pillclear
+    test byte [di+COMMON_PIXEL+bx],0xFF ; something there already?
+    jnz gl_rotate_redraw ; if occupied, dont rotate
     mov [bp+pill_offset],bx ; actually change offset
-    xor cl,bl               ; set 8 or 0 depending on orientation
+    xor cl,bl ; set 8 or 0 depending on orientation
     ror word [bp+pill_color],cl ; possibly swap colors
+gl_rotate_redraw:
     call pilldraw
 
     ;;;;;;;;;;;;;;;;
@@ -170,14 +172,16 @@ pillfall:
     add di,8*320 ; move down 1 row
     call pillmove ; pillmove sets ZF when it is successful
     jz game_loop ; no obstructions, continue game loop
+    ; otherwise, done falling this pill
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; check for clears ;;
     ;;;;;;;;;;;;;;;;;;;;;;
 clearcheck:
     mov bx,matchcheck ; check for a match, change it to clear
     call each_cell ; run matchcheck on every cell
-    mov bx,cc_nopause1 
-    call pause ; if pills cleared, pause
+    shr byte [bp+wait_flag],1 ; check & clear wait_flag
+    jnc cc_nopause1 ; if it is not set, no wait
+    call pause
 cc_nopause1:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; remove cleared pills ;;
@@ -190,8 +194,9 @@ cc_nopause1:
 %if enable_fallstuff
     mov bx,fall_stuff
     call each_cell
-    mov bx,pillnew ; if nothing fell, continue game
-    call pause ; wait, then...
+    shr byte [bp+wait_flag],1 ; check & clear wait_flag
+    jnc pillnew ; if it is not set, continue game
+    call pause
     jmp clearcheck ; ... keep running this phase
 %else
     jmp pillnew
@@ -200,13 +205,8 @@ cc_nopause1:
     ;; end of game loop ;;
     ;;;;;;;;;;;;;;;;;;;;;;
 
-; pause for a bit if flag set, otherwise jump to bx
+; wait for a bit
 pause:
-    shr byte [bp+wait_flag],1 ; check & clear wait_flag
-    jc p_wait ; if it is set, wait
-    push bx ; otherwise, return to the address in bx
-    ret
-p_wait:
     mov cx,PAUSE_LEN
     mov ah,0x86
     int 0x15
@@ -216,16 +216,14 @@ p_wait:
 ; sets ZF=1 if nothing is in the way
 ; sets pill_loc=di and pill_offset=bx if possible
 pillmove:
-    mov bx,[bp+pill_offset] ; load cur offset
     push di
-    call pillclear ; clear pill avoiding interference
+    call pillclear ; clear current pill avoiding interference, sets bx
     pop di
 pillmove_no_clear:
     mov al,[di+COMMON_PIXEL]
     or al,[di+COMMON_PIXEL+bx] ; is either cell occupied?
     jnz pm_restore ; if yes, restore pill and return
     mov [bp+pill_loc],di ; ok we're clear, move pill
-    mov [bp+pill_offset],bx ; write new offset
 pm_restore:
     pushf
     call pilldraw ; (re)draw pill
@@ -239,21 +237,21 @@ pillclear:
     xor ax,ax ; set color to none
     jmp pd_common
 
-; clobbers ax,dx,si,di
+; set bx to offset, di to loc + offset, clobbers ax, si
 pilldraw:
     mov ax,[bp+pill_color]
 pd_common:
     mov di,[bp+pill_loc]
+    mov bx,[bp+pill_offset]
     mov si,sprite_bottom
-    mov dx,[bp+pill_offset]
-    test dx,dx
+    test bx,bx
     js pd_bottom
     add si,10 ; horizontal: move si ahead to sprite_left
 pd_bottom:
     call draw_sprite
     ; `draw_sprite` leaves `si` set to the start of the next sprite
     mov al,ah ; swap colors
-    add di,dx
+    add di,bx
     ; fall through to draw_sprite
 
 ; di: top left pixel
@@ -380,25 +378,24 @@ remove_cleared:
 ; make pieces fall that can fall
 %if enable_fallstuff
 fall_stuff:
-    add di,VIRUS_PIXEL
-    test byte [di+VIRUS_PIXEL],0xFF
-    jz pm_done ; it's a virus, return
-    test byte [di+8*320+COMMON_PIXEL],0xFF
-    jnz pm_done ; something is below, return
+    mov al,[di+8*320+COMMON_PIXEL] ; below
+    not al
+    or al,[di+VIRUS_PIXEL]
+    jnz pm_done ; it's a virus, or something is below, return
     mov byte [bp+wait_flag],1 ; set wait flag
     mov si,di ; set source
     add di,8*320 ; set target to be row below
-    mov cx,8
+    mov bx,8
 fs_outer:
-    mov bx,8 
+    mov cx,8 
 fs_inner:
     movsb ; [di++] = [si++]
-    mov byte [si-1],0 ; [si-1] = 0
-    dec bx
-    jnz fs_inner
+    mov byte [si-1],0
+    loop fs_inner
     add di,312 ; increment di to next row of pixels
     add si,320 ; increment si to next row of pixels
-    loop fs_outer
+    dec bx
+    jnz fs_outer
     ret
 %endif
 
