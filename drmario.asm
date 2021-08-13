@@ -146,9 +146,9 @@ gl_check_s:
 
 ; cl = 0 for rotate left, 8 for rotate right
 gl_rotate_pill:
-    call pillclear
-    mov bx,8^(-8*320)
-    xor bx,[bp+pill_offset] ; toggle between +8 (horiz) and -8*320 (vert)
+    call pillclear ; first clear the pill
+    mov bx,8^(-8*320) ; toggle between +8 (horiz) and -8*320 (vert)
+    xor bx,[bp+pill_offset] ; bx = proposed offset
     test byte [di+COMMON_PIXEL+bx],0xFF ; something there already?
     jnz gl_rotate_redraw ; if occupied, dont rotate
     mov [bp+pill_offset],bx ; actually change offset
@@ -171,13 +171,13 @@ gl_clock:
     ;; make the pill fall ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;
 pillfall:
-    add di,8*320 ; move down 1 row
+    add di,8*320 ; proposed loc: down 1 row
     call pillmove ; pillmove sets ZF when it is successful
     jz game_loop ; no obstructions, continue game loop
     ; otherwise, done falling this pill
-    ;;;;;;;;;;;;;;;;;;;;;;
-    ;; check for clears ;;
-    ;;;;;;;;;;;;;;;;;;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; check for clears (14b) ;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 clearcheck:
     mov bx,matchcheck ; check for a match, change it to clear
     call each_cell ; run matchcheck on every cell
@@ -248,7 +248,7 @@ pd_common:
     mov si,sprite_bottom
     test bx,bx
     js pd_bottom
-    add si,10 ; horizontal: move si ahead to sprite_left
+    mov si,sprite_left
 pd_bottom:
     call draw_sprite
     ; `draw_sprite` leaves `si` set to the start of the next sprite
