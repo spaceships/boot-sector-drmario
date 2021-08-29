@@ -1,9 +1,9 @@
     bits 16
 
 ; conditional compilation of features
-%assign enable_virii 1
-%assign enable_rng 1
-%assign enable_fallstuff 0
+%assign enable_virii 0
+%assign enable_rng 0
+%assign enable_fallstuff 1
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
@@ -294,10 +294,10 @@ ds_ret:
     popa
     ret
 
+%if enable_virii
 ; potentially place a virus at di, if there aren't too many already and
 ; the virus wins the dice roll
 ; -intended to be used with each_cell
-%if enable_virii
 place_virii:
     call rng
     cmp ah,VIRUS_THRESH
@@ -351,16 +351,16 @@ remove_cleared:
     xor al,al
     jmp draw_sprite
 
-; make pieces fall that can fall
 %if enable_fallstuff
+; make pieces fall that can fall
 fall_stuff:
     cmp byte [di+VIRUS_PIXEL],0 ; virii don't have pixel set here
-    je c4_ret ; if it is 0, then its a virus, don't make it fall
+    je c4_ret ; if it is 0, then its a virus so don't make it fall
     cmp byte [di+8*320+COMMON_PIXEL],0 ; is there seomthing below?
     jnz c4_ret ; if it is not zero, there is something there
     mov byte [bp+wait_flag],1 ; set wait flag
     mov si,di ; set source
-    add di,8*320 ; set target to be row below
+    add di,8*320 ; set target to be the sprite below
     mov bx,8
 fs_outer:
     mov cx,8 
@@ -369,7 +369,7 @@ fs_inner:
     mov byte [si-1],0
     loop fs_inner
     add di,312 ; increment di to next row of pixels
-    add si,320 ; increment si to next row of pixels
+    add si,312 ; increment si to next row of pixels
     dec bx
     jnz fs_outer
     ret
