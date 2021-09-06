@@ -1,5 +1,14 @@
     bits 16
 
+%ifndef enable_load
+    ; Start address for the boot sector
+    org 0x7c00
+%else
+    ; if the game does not fit within the boot sector,
+    ; load it from the following sectors
+    org 0x7c00 + 512
+%endif
+
 ; conditional compilation of features
 %assign enable_virii 0
 %assign enable_rng 0
@@ -475,6 +484,8 @@ sprite_virus:
 
 colors:
     db PILL_YELLOW, PILL_RED, PILL_BLUE
-
-times 510 - ($ - $$) db 0
-dw 0xaa55
+     
+%ifndef enable_load
+    times 510 - ($ - $$) db 0
+    dw 0xaa55
+%endif
