@@ -1,17 +1,9 @@
     bits 16
 
-%ifndef enable_load
-    ; Start address for the boot sector
-    org 0x7c00
-%else
-    ; if the game does not fit within the boot sector,
-    ; load it from the following sectors
-    org 0x7c00 + 512
-%endif
-
 ; conditional compilation of features
-%assign enable_virii 0
-%assign enable_rng 0
+%assign enable_load 1 ; loads rest of game from following sectors
+%assign enable_virii 1
+%assign enable_rng 1
 %assign enable_fallstuff 1
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -54,7 +46,24 @@ rand:           equ next_tick + 2       ; [word]
 num_virii:      equ rand + 2            ; [byte]
 wait_flag:      equ num_virii + 1       ; [byte]
 
-start:
+    org 0x7c00 ; Start address for the boot sector
+
+%if enable_load
+    mov ah,0x02 ; set interrupt to read disk sectors
+    mov al,2 ; number of sectors to read
+    mov ch,0 ; cylinder number
+    mov cl,2 ; sector number
+    mov dh,0 ; head number
+    ; dl - drive number - is passed in by bios
+    mov bx,0x7e00 ; es:bs - address to load to - 0x7c00 + 512
+    int 0x13
+    jmp game_start
+
+    times 510 - ($ - $$) db 0
+    dw 0xaa55
+%endif
+
+game_start:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; initialization: 20 bytes ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -109,7 +118,7 @@ pillnew:
     mov bx,8 ; pillmove_no_clear needs bx set already
     mov [bp+pill_offset],bx ; initial rotation
     call pillmove_no_clear ; don't clear previous pill
-    jnz start ; if occupied, restart game
+    jnz game_start ; if occupied, restart game
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; initialization done, game loop follows ;;
@@ -485,7 +494,7 @@ sprite_virus:
 colors:
     db PILL_YELLOW, PILL_RED, PILL_BLUE
      
-%ifndef enable_load
+%if !enable_load
     times 510 - ($ - $$) db 0
     dw 0xaa55
 %endif
