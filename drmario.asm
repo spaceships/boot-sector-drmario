@@ -90,12 +90,12 @@ game_start:
     xor al,al
     mov di,BOARD_START
     mov dx,BOARD_HEIGHT
-db_black:
+.black:
     mov cx,BOARD_WIDTH
     rep stosb
     add di,320-BOARD_WIDTH
     dec dx
-    jnz db_black
+    jnz .black
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; place virii: 29 bytes ;;
@@ -117,7 +117,7 @@ pillnew:
     mov di,BOARD_START+BOARD_WIDTH/2-CELL_SIZE ; initial pill loc
     mov bx,8 ; pillmove_no_clear needs bx set already
     mov [bp+pill_offset],bx ; initial rotation
-    call pillmove_no_clear ; don't clear previous pill
+    call pillmove.no_clear ; don't clear previous pill
     jnz game_start ; if occupied, restart game
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -128,57 +128,68 @@ game_loop:
     ;;;;;;;;;;;;;;;;;;;;
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
-    ; get the actual key, if it is pressed
+    ; XXX: BIOS keeps a buffer of key presses. 
+    ; Int 0x16/ah=0x01 checks if a key is available because 
+    ; int 0x16/ah=0x00 *waits* until a key is available.
+    ; Unfortunately the buffer can be filled while we are 
+    ; waiting for pieces to fall in the bottom of the game loop.
+    ; That allows the player to pre-move the pill before it even starts falling.
+    ; The solution below is to empty the buffer every time.
+.check_key_buf:
     mov ah,0x01 ; bios key available (2b)
     int 0x16 ; sets ZF=1 if no keystroke available (2b)
-    je gl_check_left ; (2b)
-    mov ah,0x00 ; bios get keystroke
-    int 0x16    ; ah=key scan code
-    mov al,ah   ; move to al since cmp al,x is 1 byte cheaper
+    jz .key_buf_empty ; (2b)
+    mov ah,0x00 ; bios get keystroke from buffer
+    int 0x16 ; ah=key scan code
+    mov bl,ah ; store scan code in bl because both ints clobber ax 
+    jmp .check_key_buf
+.key_buf_empty:
+    mov al,bl ; move to al since cmp al,x is 1 byte cheaper
 
-gl_check_left:
+.check_left:
     cmp al,0x4b ; left arrow
-    jne gl_check_right
+    jne .check_right
     sub di,8 ; move pill left 8 pixels
     call pillmove
 
-gl_check_right:
+.check_right:
     cmp al,0x4d ; right arrow
-    jne gl_check_down
+    jne .check_down
     add di,8 ; move pill right 8 pixels
     call pillmove
 
-gl_check_down:
+.check_down:
     cmp al,0x50 ; down arrow
     je pillfall
 
-gl_check_a:
+.check_a:
     xor cl,cl ; swap colors when going horiz
     cmp al,0x1e ; 'a'
-    je gl_rotate_pill
+    je pillrotate
 
-gl_check_s:
+.check_s:
     mov cl,8 ; swap colors when going virt
     cmp al,0x1f ; 's'
-    jne gl_clock
+    jne clock
+    ; fall through to pillrotate
 
 ; cl = 0 for rotate left, 8 for rotate right
-gl_rotate_pill:
+pillrotate:
     call pillclear ; first clear the pill
     mov bx,8^(-8*320) ; toggle between +8 (horiz) and -8*320 (vert)
     xor bx,[bp+pill_offset] ; bx = proposed offset
     test byte [di+COMMON_PIXEL+bx],0xFF ; something there already?
-    jnz gl_rotate_redraw ; if occupied, dont rotate
+    jnz .redraw ; if occupied, dont rotate
     mov [bp+pill_offset],bx ; actually change offset
     xor cl,bl ; set 8 or 0 depending on orientation
     ror word [bp+pill_color],cl ; possibly swap colors
-gl_rotate_redraw:
+.redraw:
     call pilldraw
 
     ;;;;;;;;;;;;;;;;
     ;; game clock ;;
     ;;;;;;;;;;;;;;;;
-gl_clock:
+clock:
     mov ah,0x00
     int 0x1a ; bios clock read
     cmp dx,[bp+next_tick]
@@ -200,9 +211,9 @@ clearcheck:
     mov bx,matchcheck ; check for a match, change it to clear
     call each_cell ; run matchcheck on every cell
     shr byte [bp+wait_flag],1 ; check & clear wait_flag
-    jnc cc_nopause1 ; if it is not set, no wait
+    jnc .nopause ; if it is not set, no wait
     call pause
-cc_nopause1:
+.nopause:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; remove cleared pills ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -239,35 +250,35 @@ pillmove:
     push di
     call pillclear ; clear current pill, sets bx=offset
     pop di
-pillmove_no_clear:
+.no_clear:
     mov al,[di+COMMON_PIXEL]
     or al,[di+COMMON_PIXEL+bx] ; is either cell occupied?
-    jnz pm_restore ; if yes, restore pill and return
+    jnz .restore ; if yes, restore pill and return
     mov [bp+pill_loc],di ; ok we're clear, move pill
-pm_restore:
+.restore:
     pushf
     call pilldraw ; (re)draw pill
     popf
-pm_done:
+.done:
     ret
 
 ; di: top left pixel
 ; clobbers ax,dx,si,di
 pillclear:
     xor ax,ax ; set color to none
-    jmp pd_common
+    jmp pilldraw.common
 
 ; set bx to offset, di to loc + offset, clobbers ax, si
 pilldraw:
     mov ax,[bp+pill_color]
-pd_common:
+.common:
     mov di,[bp+pill_loc]
     mov bx,[bp+pill_offset]
     mov si,sprite_bottom
     test bx,bx
-    js pd_bottom
+    js .bottom
     mov si,sprite_left
-pd_bottom:
+.bottom:
     call draw_sprite
     ; `draw_sprite` leaves `si` set to the start of the next sprite
     mov al,ah ; swap colors
@@ -281,19 +292,19 @@ draw_sprite:
     pusha
     mov ah,al ; save color in ah
     mov dx,SPRITE_ROWS
-ds_row:
+.row:
     cs lodsb ; load byte of the sprite into al, advance si
     mov bl,al ; save it in bl
-ds_row_again:
+.row_again:
     mov cx,SPRITE_COLS ; ds_col row runs 7 times
-ds_col:
+.col:
     xor al,al ; set al = 0 = black
     rol bl,1 ; rotate bl left by 1, sets CF
-    jnc ds_print ; if we just shifted off a 0, print black pixel
+    jnc .print ; if we just shifted off a 0, print black pixel
     mov al,ah ; otherwise get the color
-ds_print:
+.print:
     stosb ; [di++] = al, print color to current pixel loc
-    loop ds_col
+    loop .col
     add di,320-7 ; increment di: +1 row, -8 cols
     ; The `ds_col` loop has run 7 times, rotating the original `bl` from
     ; `0xXXXXXXXR` 7 places to produce `0xRXXXXXXX`.  Shifting by 1 more bit
@@ -301,15 +312,14 @@ ds_print:
     ; the same row (if R is set) but won't repeat again afterward.
     shl bl,1 ; shift sprite row over by 1, setting CF, zeroing repeat bit
     dec dx ; decrement row counter, preserving the carry flag
-    jc ds_row_again ; if the last bit of bl was 1, do the row again
-    jnz ds_row ; if dx!=0, do another row
-ds_end:
+    jc .row_again ; if the last bit of bl was 1, do the row again
+    jnz .row ; if dx!=0, do another row
     ; Preserve the final `si`, leaving it set to the start of the next sprite.
     ; `pilldraw` uses this to draw the second half of the two-part pill.
     mov bp,sp
     mov [bp+2],si
-ds_ret:
     popa
+.ret
     ret
 
 %if enable_virii
@@ -319,9 +329,9 @@ ds_ret:
 place_virii:
     call rng
     cmp ah,VIRUS_THRESH
-    jb pm_done ; return
+    jb draw_sprite.ret ; return
     dec byte [bp+num_virii]
-    js pm_done ; return if num_virii is underflowing
+    js draw_sprite.ret ; return if num_virii is underflowing
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
 %endif
@@ -341,23 +351,23 @@ check4:
     push di ; di can be mangled arbitrarily
     mov al,[di+COMMON_PIXEL] ; get first sprite color
     test al,al
-    jz c4_done ; ignore black cells
+    jz .done ; ignore black cells
     mov cx,3
-c4_check:
+.check:
     add di,bx ; add offset
     cmp al,[di+COMMON_PIXEL] ; compare 3 offsets by bx
-    jne c4_done ; if not equal, return
-    loop c4_check
+    jne .done ; if not equal, return
+    loop .check
     mov cx,4 ; clear all 4 sprites
-c4_clear:
+.clear:
     mov si,sprite_clear
     call draw_sprite ; al is set from above
     sub di,bx ; subtract offset
-    loop c4_clear
+    loop .clear
     mov byte [bp+wait_flag],1 ; set wait flag
-c4_done:
+.done:
     pop di
-c4_ret:
+.ret:
     ret
 
 ; remove any cleared pill piece in the cell
@@ -365,7 +375,7 @@ c4_ret:
 ; intended to be used with each_cell
 remove_cleared:
     test byte [di+CLEAR_PIXEL],0xFF
-    jnz c4_ret ; near jump to return statement (2b)
+    jnz check4.ret ; near jump to return statement (2b)
     xor al,al
     jmp draw_sprite
 
@@ -373,23 +383,23 @@ remove_cleared:
 ; make pieces fall that can fall
 fall_stuff:
     cmp byte [di+VIRUS_PIXEL],0 ; virii don't have pixel set here
-    je c4_ret ; if it is 0, then its a virus so don't make it fall
+    je check4.ret ; if it is 0, then its a virus so don't make it fall
     cmp byte [di+8*320+COMMON_PIXEL],0 ; is there seomthing below?
-    jnz c4_ret ; if it is not zero, there is something there
+    jnz check4.ret ; if it is not zero, there is something there
     mov byte [bp+wait_flag],1 ; set wait flag
     mov si,di ; set source
     add di,8*320 ; set target to be the sprite below
     mov bx,8
-fs_outer:
+.outer:
     mov cx,8 
-fs_inner:
+.inner:
     movsb ; [di++] = [si++]
     mov byte [si-1],0
-    loop fs_inner
+    loop .inner
     add di,312 ; increment di to next row of pixels
     add si,312 ; increment si to next row of pixels
     dec bx
-    jnz fs_outer
+    jnz .outer
     ret
 %endif
 
@@ -398,18 +408,18 @@ each_cell:
     ; start at bottom right cell and work back.
     ; this is for place_virii so it can place most of them at the bottom.
     mov di,BOARD_END-CELL_SIZE*320-CELL_SIZE
-ec_outer:
+.outer:
     mov cx,NUM_COLS
-ec_inner:
+.inner:
     pusha
     call bx
     popa
     sub di,CELL_SIZE
-    loop ec_inner
+    loop .inner
     ; if cx is 0, then subtract row
     sub di,CELL_SIZE*320-BOARD_WIDTH
     cmp di,BOARD_START
-    ja ec_outer
+    ja .outer
     ret
 
 ; put a random color from colors array into al
