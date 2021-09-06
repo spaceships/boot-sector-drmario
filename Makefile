@@ -9,6 +9,7 @@ dis: drmario.bin
 
 size: drmario.asm
 	@perl -nE 'print unless /times 510|dw 0xaa55/' $^ > tmp.asm
+	@perl -pi -E 's/enable_load 1/enable_load 0/' tmp.asm
 	@nasm tmp.asm -o tmp.bin
 	@wc -c < tmp.bin
 	@rm tmp.*
