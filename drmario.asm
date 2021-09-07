@@ -449,11 +449,11 @@ fall_stuff:
     mov bx,dx
     cmp byte [di+bx+COMMON_PIXEL],0 ; something below to the left/right?
     jnz check4.ret ; if there is something there, bail
-    add si,bx ; otherwise copy the left/right sprite down
-    add di,bx
+    add si,dx ; otherwise copy the left/right sprite down
+    add di,dx
     call move_sprite
-    sub di,bx ; restore di
-    sub si,bx ; restore si
+    sub di,dx ; restore di
+    sub si,dx ; restore si
 
 .success:
     mov byte [bp+wait_flag],1 ; set wait flag
