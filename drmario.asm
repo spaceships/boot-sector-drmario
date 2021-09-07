@@ -130,13 +130,11 @@ game_loop:
     ;;;;;;;;;;;;;;;;;;;;
     ;; get user input ;;
     ;;;;;;;;;;;;;;;;;;;;
-    ; XXX: BIOS keeps a buffer of key presses. 
-    ; Int 0x16/ah=0x01 checks if a key is available because 
-    ; int 0x16/ah=0x00 *waits* until a key is available.
-    ; Unfortunately the buffer can be filled while we are 
-    ; waiting for pieces to fall in the bottom of the game loop.
-    ; That allows the player to pre-move the pill before it even starts falling.
-    ; The solution below is to empty the buffer every time.
+    ; BIOS keeps a buffer of key presses. Int 0x16/ah=0x01 checks if a key is available
+    ; because int 0x16/ah=0x00 *waits* until a key is available. Unfortunately the buffer
+    ; can be filled while we are waiting for pieces to fall in the bottom of the game
+    ; loop. That allows the player to pre-move the pill before it even starts falling. The
+    ; solution below is to empty the buffer every time.
 .check_key_buf:
     mov ah,0x01 ; bios key available (2b)
     int 0x16 ; sets ZF=1 if no keystroke available (2b)
@@ -254,9 +252,9 @@ pillmove:
     jnz .restore ; if yes, restore pill and return
     mov [bp+pill_loc],di ; ok we're clear, move pill
 .restore:
-    pushf
+    pushf ; save flags from above (used by pillfall)
     call pilldraw ; (re)draw pill
-    popf
+    popf ; restore flags from above
 .done:
     ret
 
@@ -264,14 +262,14 @@ pillmove:
 ; clobbers ax,dx,si,di
 pillclear:
     xor ax,ax
-    call pilldraw.common
-    mov byte [di+DIR_PIXEL],0
-    sub di,bx
-    mov byte [di+DIR_PIXEL],0
+    call pilldraw.common ; sets bx=offset, di=loc + offset
+    mov byte [di+DIR_PIXEL],0 ; clear offset dir (set by pilldraw)
+    sub di,bx ; subtract offset from di
+    mov byte [di+DIR_PIXEL],0 ; clear primary dir
     ret
 
 ; set bx to offset, di to loc + offset, clobbers ax, si
-; sets DIR_PIXEL
+; sets DIR_PIXELs
 pilldraw:
     mov ax,[bp+pill_color]
 .common:
@@ -373,15 +371,15 @@ check4:
     mov si,sprite_clear ; change to clear sprite
     call draw_sprite ; al=color is set from above
     ; change any pill part neighbors to sprite_single
-    call dir_to_offset ; uses dl as arg
+    call dir_to_offset ; uses dl as arg, sets dx=offset
     jne .cont ; continue if no DIR_PIXEL
     mov si,sprite_single
-    add di,dx
-    push ax
-    mov al,[di+COMMON_PIXEL] 
-    call draw_sprite
-    pop ax
-    sub di,dx
+    add di,dx ; add the direction offset to di
+    push ax ; save the color we are clearing
+    mov al,[di+COMMON_PIXEL] ; get the color of the sprite to be replaced
+    call draw_sprite ; redraw it as sprite_single (sets dir=0)
+    pop ax ; restore clearing color
+    sub di,dx ; restore di
 .cont:
     sub di,bx ; subtract offset
     loop .clear
@@ -391,7 +389,7 @@ check4:
 .ret:
     ret
 
-; convert dl=direction to dx=offset
+; convert dl=direction to dx=offset (40 bytes)
 dir_to_offset:
     cmp dl,DIR_UP
     jne .test_down
@@ -427,6 +425,7 @@ remove_cleared:
     jmp draw_sprite
 
 ; make pieces fall that can fall
+; intended to be used with each_cell
 fall_stuff:
     cmp byte [di+VIRUS_PIXEL],0 ; virii don't have pixel set here
     je check4.ret ; if it is 0, then its a virus so don't make it fall
@@ -453,12 +452,12 @@ fall_stuff:
     add si,bx ; otherwise copy the left/right sprite down
     add di,bx
     call move_sprite
-    sub di,bx
-    sub si,bx
+    sub di,bx ; restore di
+    sub si,bx ; restore si
 
 .success:
     mov byte [bp+wait_flag],1 ; set wait flag
-    ; fall through to move_sprite
+    ; fall through to move_sprite to move primary sprite
 
 ; move sprite starting at si to start at di
 move_sprite:
