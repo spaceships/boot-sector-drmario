@@ -1,7 +1,7 @@
 run: drmario.bin
 	qemu-system-i386 -hda $^
 
-palette: palette.img
+palette: palette.bin
 	qemu-system-i386 -hda $^
 
 dis: drmario.bin

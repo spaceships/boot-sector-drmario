@@ -1,10 +1,6 @@
     bits 16
 
-; conditional compilation of features
-%assign enable_load 1 ; loads rest of game from following sectors
-%assign enable_virii 1
-%assign enable_rng 1
-%assign enable_fallstuff 1
+%assign enable_load 1 ; load the rest of the game from the boot sector
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; adjustable parameters ;;
@@ -33,6 +29,11 @@ BOARD_END:    equ (100+BOARD_HEIGHT/2)*320+(160+BOARD_WIDTH/2)
 COMMON_PIXEL: equ 5
 CLEAR_PIXEL:  equ 643 ; 2 pixels down, 3 right
 VIRUS_PIXEL:  equ 3*320+3
+DIR_PIXEL:    equ 7 ; the top right pixel encodes the direction
+DIR_UP:       equ 0xFF
+DIR_DOWN:     equ 0xFD
+DIR_LEFT:     equ 0xFC
+DIR_RIGHT:    equ 0xFB
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; game variables ;;
@@ -49,6 +50,9 @@ wait_flag:      equ num_virii + 1       ; [byte]
     org 0x7c00 ; Start address for the boot sector
 
 %if enable_load
+    ;;;;;;;;;;;;
+    ;; loader ;;
+    ;;;;;;;;;;;;
     mov ah,0x02 ; set interrupt to read disk sectors
     mov al,2 ; number of sectors to read
     mov ch,0 ; cylinder number
@@ -60,7 +64,7 @@ wait_flag:      equ num_virii + 1       ; [byte]
     jmp game_start
 
     times 510 - ($ - $$) db 0
-    dw 0xaa55
+    dw 0xaa55 ; bios boot sector flag
 %endif
 
 game_start:
@@ -100,11 +104,9 @@ game_start:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; place virii: 29 bytes ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-%if enable_virii
     mov byte [bp+num_virii],VIRUS_MAX
     mov bx,place_virii
     call each_cell
-%endif
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; make a new pill: 26 bytes ;;
@@ -222,16 +224,12 @@ clearcheck:
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make stuff fall ;;
     ;;;;;;;;;;;;;;;;;;;;;
-%if enable_fallstuff
     mov bx,fall_stuff
     call each_cell
     shr byte [bp+wait_flag],1 ; check & clear wait_flag
     jnc pillnew ; if it is not set, continue game
     call pause
     jmp clearcheck ; ... keep running this phase
-%else
-    jmp pillnew
-%endif
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; end of game loop ;;
     ;;;;;;;;;;;;;;;;;;;;;;
@@ -265,31 +263,44 @@ pillmove:
 ; di: top left pixel
 ; clobbers ax,dx,si,di
 pillclear:
-    xor ax,ax ; set color to none
-    jmp pilldraw.common
+    xor ax,ax
+    call pilldraw.common
+    mov byte [di+DIR_PIXEL],0
+    sub di,bx
+    mov byte [di+DIR_PIXEL],0
+    ret
 
 ; set bx to offset, di to loc + offset, clobbers ax, si
+; sets DIR_PIXEL
 pilldraw:
     mov ax,[bp+pill_color]
 .common:
     mov di,[bp+pill_loc]
     mov bx,[bp+pill_offset]
     mov si,sprite_bottom
+    mov dl,DIR_UP
+    mov dh,DIR_DOWN
     test bx,bx
-    js .bottom
+    js .draw
     mov si,sprite_left
-.bottom:
+    mov dl,DIR_RIGHT
+    mov dh,DIR_LEFT
+.draw:
     call draw_sprite
+    mov [di+DIR_PIXEL],dl
     ; `draw_sprite` leaves `si` set to the start of the next sprite
     mov al,ah ; swap colors
     add di,bx
-    ; fall through to draw_sprite
+    call draw_sprite
+    mov [di+DIR_PIXEL],dh
+    ret
 
 ; di: top left pixel
 ; si: start of sprite
 ; al: color
 draw_sprite:
     pusha
+    mov byte [di+DIR_PIXEL],0 ; always clear dir pixel
     mov ah,al ; save color in ah
     mov dx,SPRITE_ROWS
 .row:
@@ -319,10 +330,9 @@ draw_sprite:
     mov bp,sp
     mov [bp+2],si
     popa
-.ret
+.ret:
     ret
 
-%if enable_virii
 ; potentially place a virus at di, if there aren't too many already and
 ; the virus wins the dice roll
 ; -intended to be used with each_cell
@@ -334,7 +344,6 @@ place_virii:
     js draw_sprite.ret ; return if num_virii is underflowing
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
-%endif
 
 ; check the column up to 4 below and 4 to the right
 ; changes matches into sprite_clear
@@ -360,8 +369,20 @@ check4:
     loop .check
     mov cx,4 ; clear all 4 sprites
 .clear:
-    mov si,sprite_clear
-    call draw_sprite ; al is set from above
+    mov dl,[di+DIR_PIXEL] ; save direction to dl
+    mov si,sprite_clear ; change to clear sprite
+    call draw_sprite ; al=color is set from above
+    ; change any pill part neighbors to sprite_single
+    call dir_to_offset ; uses dl as arg
+    jne .cont ; continue if no DIR_PIXEL
+    mov si,sprite_single
+    add di,dx
+    push ax
+    mov al,[di+COMMON_PIXEL] 
+    call draw_sprite
+    pop ax
+    sub di,dx
+.cont:
     sub di,bx ; subtract offset
     loop .clear
     mov byte [bp+wait_flag],1 ; set wait flag
@@ -369,6 +390,32 @@ check4:
     pop di
 .ret:
     ret
+
+; convert dl=direction to dx=offset
+dir_to_offset:
+    cmp dl,DIR_UP
+    jne .test_down
+    mov dx,-8*320
+    ret
+.test_down:
+    cmp dl,DIR_DOWN
+    jne .test_left
+    mov dx,8*320
+    ret
+.test_left:
+    cmp dl,DIR_LEFT
+    jne .test_right
+    mov dx,-8
+    ret
+.test_right:
+    cmp dl,DIR_RIGHT
+    jne .none
+    mov dx,8
+    ret
+.none:
+    mov dx,0 ; doesn't set flags
+    ret
+
 
 ; remove any cleared pill piece in the cell
 ; di: top left corner
@@ -379,16 +426,42 @@ remove_cleared:
     xor al,al
     jmp draw_sprite
 
-%if enable_fallstuff
 ; make pieces fall that can fall
 fall_stuff:
     cmp byte [di+VIRUS_PIXEL],0 ; virii don't have pixel set here
     je check4.ret ; if it is 0, then its a virus so don't make it fall
-    cmp byte [di+8*320+COMMON_PIXEL],0 ; is there seomthing below?
-    jnz check4.ret ; if it is not zero, there is something there
-    mov byte [bp+wait_flag],1 ; set wait flag
-    mov si,di ; set source
+
+    cmp byte [di+8*320+COMMON_PIXEL],0 ; is there something directly below?
+    jnz check4.ret ; if not zero, there is something there, bail
+
+    mov al,[di+DIR_PIXEL] ; set al = direction
+    mov si,di ; set source for move sprite
     add di,8*320 ; set target to be the sprite below
+
+    cmp al,DIR_LEFT ; is the direction LEFT?
+    je .fall_left_right
+    cmp al,DIR_RIGHT ; is the direction RIGHT?
+    jne .success ; nope, fall
+
+.fall_left_right:
+    ; ok it is left or right, get offset
+    mov dl,al
+    call dir_to_offset ; dx=offset
+    mov bx,dx
+    cmp byte [di+bx+COMMON_PIXEL],0 ; something below to the left/right?
+    jnz check4.ret ; if there is something there, bail
+    add si,bx ; otherwise copy the left/right sprite down
+    add di,bx
+    call move_sprite
+    sub di,bx
+    sub si,bx
+
+.success:
+    mov byte [bp+wait_flag],1 ; set wait flag
+    ; fall through to move_sprite
+
+; move sprite starting at si to start at di
+move_sprite:
     mov bx,8
 .outer:
     mov cx,8 
@@ -401,7 +474,6 @@ fall_stuff:
     dec bx
     jnz .outer
     ret
-%endif
 
 ; call a function in bx with di set to start of each cell on the board
 each_cell:
@@ -425,7 +497,6 @@ each_cell:
 ; put a random color from colors array into al
 ; put a random byte into ah
 rng:
-%if enable_rng
     ; This implements an LFSR with two taps: the sequence of bits satisfies
     ; the recurrence R(n) = R(n-7) + R(n-15).
     ; As x^15 + x^7 + 1 is a primitive polynomial in GF(2), this sequence
@@ -444,11 +515,6 @@ rng:
     mov bx,colors-1
     cs xlat  ; al = [colors + al]
     ret
-%else
-    mov ah,0xFF
-    mov al,PILL_BLUE
-    ret
-%endif
 
 ; All sprites consist of 7 rows of 7 pixels.
 ; The format of each row is 0xXXXXXXXR.  One X bit per column, indicating
@@ -503,8 +569,8 @@ sprite_virus:
 
 colors:
     db PILL_YELLOW, PILL_RED, PILL_BLUE
-     
+
 %if !enable_load
     times 510 - ($ - $$) db 0
-    dw 0xaa55
+    dw 0xaa55 ; bios boot sector flag
 %endif
