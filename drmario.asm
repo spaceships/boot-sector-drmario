@@ -104,7 +104,7 @@ game_start:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; place virii: 29 bytes ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    mov byte [bp+num_virii],VIRUS_MAX
+    mov byte [bp+num_virii],0
     mov bx,place_virii
     call each_cell
 
@@ -211,9 +211,8 @@ clearcheck:
     mov bx,matchcheck ; check for a match, change it to clear
     call each_cell ; run matchcheck on every cell
     shr byte [bp+wait_flag],1 ; check & clear wait_flag
-    jnc .nopause ; if it is not set, no wait
+    jnc .cont ; if it is not set, continue game
     call pause
-.nopause:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; remove cleared pills ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -222,12 +221,21 @@ clearcheck:
     ;;;;;;;;;;;;;;;;;;;;;
     ;; make stuff fall ;;
     ;;;;;;;;;;;;;;;;;;;;;
+.fall:
     mov bx,fall_stuff
     call each_cell
     shr byte [bp+wait_flag],1 ; check & clear wait_flag
-    jnc pillnew ; if it is not set, continue game
-    call pause
+    jnc .nextcheck ; if it is not set, nothing fell, continue game
+    call pause ; otherwise pause 
+    jmp .fall
+.nextcheck:
     jmp clearcheck ; ... keep running this phase
+.cont:
+    cmp byte [bp+num_virii],0
+    ja pillnew
+.halt:
+    hlt
+    jmp .halt
     ;;;;;;;;;;;;;;;;;;;;;;
     ;; end of game loop ;;
     ;;;;;;;;;;;;;;;;;;;;;;
@@ -338,8 +346,9 @@ place_virii:
     call rng
     cmp ah,VIRUS_THRESH
     jb draw_sprite.ret ; return
-    dec byte [bp+num_virii]
-    js draw_sprite.ret ; return if num_virii is underflowing
+    cmp byte [bp+num_virii],VIRUS_MAX
+    je draw_sprite.ret ; return if num_virii has reached the limit
+    inc byte [bp+num_virii] ; increment virii counter
     mov si,sprite_virus ; draw virus sprite
     jmp draw_sprite
 
@@ -366,6 +375,10 @@ check4:
     jne .done ; if not equal, return
     loop .check
     mov cx,4 ; clear all 4 sprites
+    ; if it is a virus, dec num_virii
+    cmp byte [di+VIRUS_PIXEL],0 ; virii don't have pixel set here
+    jne .clear; if it not 0, then its not a virus
+    dec byte [bp+num_virii]
 .clear:
     mov dl,[di+DIR_PIXEL] ; save direction to dl
     mov si,sprite_clear ; change to clear sprite
