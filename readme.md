@@ -21,7 +21,7 @@ make size
 
 Contributors
 ============
-Brent Carmer (author)
-Brian Huffman (optimization wizard)
-Daniel Wagner (optimzation contributor)
-Stuart Pernsteiner (optimzation contributor)
+* Brent Carmer (author)
+* Brian Huffman (optimization wizard)
+* Daniel Wagner (optimzation contributor)
+* Stuart Pernsteiner (optimzation contributor)
