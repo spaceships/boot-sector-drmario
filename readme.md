@@ -1,7 +1,7 @@
 Boot Sector Dr. Mario
 =====================
 
-![gameplay gif](https://gitlab-ext.galois.com/bcarmer/boot-sector-drmario/raw/master/img/drmario.gif "Dr Mario")
+![gameplay gif](https://gitlab-ext.galois.com/bcarmer/boot-sector-drmario/raw/master/game.gif "Dr Mario")
 
 This is an implementation of Dr. Mario in 16-bit x86. It is an attempt to make Dr. Mario
 fit within the 512 byte boot sector. It uses BIOS interrupts to do things like set video
