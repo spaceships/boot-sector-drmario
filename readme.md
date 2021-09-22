@@ -22,7 +22,9 @@ make size
 ```
 
 I wouldn't have even known about boot sector games without stumbling on the Oscar
-Toledo G.'s book [Programming Boot Sector Games](https://www.amazon.com/Programming-Sector-Games-Toledo-Gutierrez/dp/0359816312).
+Toledo G.'s book [Programming Boot Sector
+Games](https://www.amazon.com/Programming-Sector-Games-Toledo-Gutierrez/dp/0359816312).
+Many of the tricks used in this program came from there.
 
 Contributors
 ============
