@@ -5,9 +5,7 @@ Boot Sector Dr. Mario
 
 This is an implementation of Dr. Mario in 16-bit x86. It is an attempt to make Dr. Mario
 fit within the 512 byte boot sector. It uses BIOS interrupts to do things like set video
-mode. It is currently a bit larger than 512 bytes!
-
-**I am looking for collaborators!**
+mode. It is currently a bit larger than 512 bytes, so it cheats and loads the other sectors from disk. **I am looking for collaborators to get it down to a single sector!**
 
 Dependencies: `qemu-system-i386`, `nasm`.
 
@@ -22,6 +20,9 @@ To find the current size of it
 ```
 make size
 ```
+
+I wouldn't have even known about boot sector games without stumbling on the Oscar
+Toledo G.'s book [Programming Boot Sector Games](https://www.amazon.com/Programming-Sector-Games-Toledo-Gutierrez/dp/0359816312).
 
 Contributors
 ============
