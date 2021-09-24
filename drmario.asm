@@ -87,7 +87,7 @@ game_start:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ; draw colored part
     mov al,BORDER_COLOR
-    mov cx,320*200
+    mov cx,bp ; 0xfc80>320*200
     xor di,di
     rep stosb
     ; draw black part
@@ -95,7 +95,7 @@ game_start:
     mov di,BOARD_START
     mov dx,BOARD_HEIGHT
 .black:
-    mov cx,BOARD_WIDTH
+    mov cl,BOARD_WIDTH ; ch is already 0
     rep stosb
     add di,320-BOARD_WIDTH
     dec dx
@@ -104,7 +104,7 @@ game_start:
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; place virii: 29 bytes ;;
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    mov byte [bp+num_virii],0
+    mov byte [bp+num_virii],al ; al=0
     mov bx,place_virii
     call each_cell
 
@@ -284,13 +284,11 @@ pilldraw:
     mov di,[bp+pill_loc]
     mov bx,[bp+pill_offset]
     mov si,sprite_bottom
-    mov dl,DIR_UP
-    mov dh,DIR_DOWN
+    mov dx,DIR_DOWN*256+DIR_UP
     test bx,bx
     js .draw
     mov si,sprite_left
-    mov dl,DIR_RIGHT
-    mov dh,DIR_LEFT
+    mov dx,DIR_LEFT*256+DIR_RIGHT
 .draw:
     call draw_sprite
     mov [di+DIR_PIXEL],dl
@@ -420,11 +418,10 @@ dir_to_offset:
     ret
 .test_right:
     cmp dl,DIR_RIGHT
-    jne .none
     mov dx,8
-    ret
+    jne .none
+    mov dl,0 ; doesn't set flags
 .none:
-    mov dx,0 ; doesn't set flags
     ret
 
 
